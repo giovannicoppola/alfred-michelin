@@ -1,0 +1,8 @@
+.git
+.github
+.vscode
+**/*.csv
+**/*.db
+**/*.gif
+**/*.png
+*/cache
