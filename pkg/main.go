@@ -83,6 +83,28 @@ func main() {
 	// Skip CSV import for new database - data should already exist
 	// The new database comes pre-populated with restaurant data
 
+	// Automatically check for database updates before processing any commands
+	fmt.Fprintf(os.Stderr, "[DEBUG] Checking for database updates...\n")
+	err = db.UpdateDatabase(dbPath)
+	if err != nil {
+		if db.IsNoUpdateAvailable(err) {
+			// No update file found - this is normal, just log at debug level
+			fmt.Fprintf(os.Stderr, "[DEBUG] No database update file found\n")
+		} else {
+			// Real error occurred during update - log it but continue
+			fmt.Fprintf(os.Stderr, "[ERROR] Database update failed: %v\n", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Database update completed successfully\n")
+		// Reinitialize database connection after update
+		database.Close()
+		database, err = db.Initialize(dbPath)
+		if err != nil {
+			fmt.Printf("Error reinitializing database after update: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Process commands
 	command := os.Args[1]
 	switch command {
@@ -93,12 +115,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] Search command called\n")
 		fmt.Fprintf(os.Stderr, "[DEBUG] Command args: %v\n", os.Args)
 		fmt.Fprintf(os.Stderr, "[DEBUG] search_query env var: '%s'\n", os.Getenv("search_query"))
+		fmt.Fprintf(os.Stderr, "[DEBUG] mode env var: '%s'\n", os.Getenv("mode"))
 
-		// Check if there's a saved search query in environment variable
-		if envQuery := os.Getenv("search_query"); envQuery != "" {
-			query = envQuery
-			fmt.Fprintf(os.Stderr, "[DEBUG] Using environment query: '%s'\n", query)
-		} else if len(os.Args) >= 3 {
+		// Check if there's a search query provided
+		if len(os.Args) >= 3 {
 			query = os.Args[2]
 			fmt.Fprintf(os.Stderr, "[DEBUG] Using command line query: '%s'\n", query)
 		} else {
@@ -107,7 +127,19 @@ func main() {
 			return
 		}
 
-		handleSearch(database, query)
+		// Check if we're in a specific mode (favorites or visited)
+		mode := os.Getenv("mode")
+		switch mode {
+		case "favorites":
+			fmt.Fprintf(os.Stderr, "[DEBUG] Search in favorites mode\n")
+			handleSearchFavorites(database, query)
+		case "visited":
+			fmt.Fprintf(os.Stderr, "[DEBUG] Search in visited mode\n")
+			handleSearchVisited(database, query)
+		default:
+			fmt.Fprintf(os.Stderr, "[DEBUG] Search in normal mode\n")
+			handleSearch(database, query)
+		}
 
 	case "get":
 		if len(os.Args) < 3 {
@@ -151,10 +183,26 @@ func main() {
 		handleToggleVisited(database, id, date, notes)
 
 	case "favorites":
-		handleFavorites(database)
+		if len(os.Args) >= 3 {
+			// Search within favorites
+			query := os.Args[2]
+			fmt.Fprintf(os.Stderr, "[DEBUG] Searching within favorites with query: '%s'\n", query)
+			handleSearchFavorites(database, query)
+		} else {
+			// Show all favorites
+			handleFavorites(database)
+		}
 
 	case "visited":
-		handleVisited(database)
+		if len(os.Args) >= 3 {
+			// Search within visited
+			query := os.Args[2]
+			fmt.Fprintf(os.Stderr, "[DEBUG] Searching within visited with query: '%s'\n", query)
+			handleSearchVisited(database, query)
+		} else {
+			// Show all visited
+			handleVisited(database)
+		}
 
 	case "award-history":
 		if len(os.Args) < 3 {
@@ -173,10 +221,14 @@ func main() {
 			searchQuery = os.Args[3]
 		}
 
+		// Get mode from environment variable
+		mode := os.Getenv("mode")
+
 		// Debug output to stderr
 		fmt.Fprintf(os.Stderr, "[DEBUG] Award history command called\n")
 		fmt.Fprintf(os.Stderr, "[DEBUG] Restaurant ID: %d\n", id)
 		fmt.Fprintf(os.Stderr, "[DEBUG] search_query env var before: '%s'\n", os.Getenv("search_query"))
+		fmt.Fprintf(os.Stderr, "[DEBUG] mode env var: '%s'\n", mode)
 		fmt.Fprintf(os.Stderr, "[DEBUG] Final search query for award history: '%s'\n", searchQuery)
 
 		// Set the search query environment variable if provided
@@ -185,16 +237,23 @@ func main() {
 			fmt.Fprintf(os.Stderr, "[DEBUG] Set search_query env var to: '%s'\n", searchQuery)
 		}
 
+		// Set the mode environment variable if provided
+		if mode != "" {
+			os.Setenv("mode", mode)
+			fmt.Fprintf(os.Stderr, "[DEBUG] Set mode env var to: '%s'\n", mode)
+		}
+
 		handleAwardHistory(database, id, searchQuery)
 
 	case "back":
-		// Go back to search results - the search command will pick up the environment variable
+		// Go back to search results - the search command will pick up the file-stored query
 		var query string
 
 		// Debug output to stderr
 		fmt.Fprintf(os.Stderr, "[DEBUG] Back command called\n")
 		fmt.Fprintf(os.Stderr, "[DEBUG] Command args: %v\n", os.Args)
 		fmt.Fprintf(os.Stderr, "[DEBUG] search_query env var: '%s'\n", os.Getenv("search_query"))
+		fmt.Fprintf(os.Stderr, "[DEBUG] mode env var: '%s'\n", os.Getenv("mode"))
 
 		// Get query from environment variable
 		if envQuery := os.Getenv("search_query"); envQuery != "" {
@@ -206,8 +265,23 @@ func main() {
 			return
 		}
 
-		// Use the search query to recreate the original search
-		handleSearch(database, query)
+		// Check if we're in a specific mode and use the appropriate search function
+		mode := os.Getenv("mode")
+		switch mode {
+		case "favorites":
+			fmt.Fprintf(os.Stderr, "[DEBUG] Back to favorites mode\n")
+			handleSearchFavorites(database, query)
+		case "visited":
+			fmt.Fprintf(os.Stderr, "[DEBUG] Back to visited mode\n")
+			handleSearchVisited(database, query)
+		default:
+			fmt.Fprintf(os.Stderr, "[DEBUG] Back to normal search mode\n")
+			handleSearch(database, query)
+		}
+
+	case "update-database":
+		fmt.Fprintf(os.Stderr, "[DEBUG] Update database command called\n")
+		handleUpdateDatabase(dbPath)
 
 	default:
 		showError(fmt.Sprintf("Unknown command: %s", command))
@@ -310,6 +384,214 @@ func handleSearch(database *sql.DB, query string) {
 				"is_favorite":     r.IsFavorite,
 				"is_visited":      r.IsVisited,
 				"OPEN_IN":         openInURL,
+				"search_query":    query,
+				"mode":            "",
+			},
+		}
+
+		// Add icon for bib gourmand
+		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
+			item.Icon = map[string]string{
+				"path": "../source/icons/bibg.png",
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	// Return results
+	result := AlfredResult{Items: items}
+	if err := printJSON(result); err != nil {
+		showError(fmt.Sprintf("Error formatting results: %v", err))
+	}
+}
+
+// handleSearchFavorites searches within favorite restaurants and returns results in Alfred format
+func handleSearchFavorites(database *sql.DB, query string) {
+	// Search favorite restaurants with timing
+	var restaurants []db.Restaurant
+	var err error
+
+	timeQuery(fmt.Sprintf("search favorites query: '%s'", query), func() error {
+		restaurants, err = db.SearchFavoriteRestaurants(database, query)
+		return err
+	})
+
+	if err != nil {
+		showError(fmt.Sprintf("Search favorites error: %v", err))
+		return
+	}
+
+	// Check if no results found
+	if len(restaurants) == 0 {
+		showNoResults("No favorite restaurants found matching your search.")
+		return
+	}
+
+	// Format results for Alfred
+	items := make([]AlfredItem, 0, len(restaurants))
+	totalCount := len(restaurants)
+
+	for i, r := range restaurants {
+		// Get cuisine or set default value
+		cuisine := "Unknown cuisine"
+		if r.Cuisine != nil && *r.Cuisine != "" {
+			cuisine = *r.Cuisine
+		}
+
+		// Get location or set default value
+		location := "Unknown location"
+		if r.Location != nil && *r.Location != "" {
+			location = *r.Location
+		}
+
+		// Create Alfred item
+		restaurantName := "Unknown restaurant"
+		if r.Name != nil && *r.Name != "" {
+			restaurantName = *r.Name
+		}
+
+		// Add heart emoji to title for favorites (always for favorites search)
+		restaurantName = restaurantName + " ❤️"
+
+		// Add visited emoji to title if needed
+		if r.IsVisited {
+			restaurantName = restaurantName + " ✅"
+		}
+
+		// Format award display with stars and year
+		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+
+		// Create counter prefix
+		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
+
+		// Get the appropriate URL based on OPEN_IN preference
+		openInURL := getOpenInURL(r)
+
+		item := AlfredItem{
+			UID:   fmt.Sprintf("restaurant-%d", r.ID),
+			Title: restaurantName,
+			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
+				counter,
+				location,
+				award,
+				cuisine),
+			Arg:   fmt.Sprintf("%d", r.ID),
+			Valid: true,
+			Variables: map[string]interface{}{
+				"restaurant_id":   r.ID,
+				"restaurant_name": restaurantName,
+				"is_favorite":     r.IsFavorite,
+				"is_visited":      r.IsVisited,
+				"OPEN_IN":         openInURL,
+				"search_query":    query,
+				"mode":            "favorites",
+			},
+		}
+
+		// Add icon for bib gourmand
+		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
+			item.Icon = map[string]string{
+				"path": "../source/icons/bibg.png",
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	// Return results
+	result := AlfredResult{Items: items}
+	if err := printJSON(result); err != nil {
+		showError(fmt.Sprintf("Error formatting results: %v", err))
+	}
+}
+
+// handleSearchVisited searches within visited restaurants and returns results in Alfred format
+func handleSearchVisited(database *sql.DB, query string) {
+	// Search visited restaurants with timing
+	var restaurants []db.Restaurant
+	var err error
+
+	timeQuery(fmt.Sprintf("search visited query: '%s'", query), func() error {
+		restaurants, err = db.SearchVisitedRestaurants(database, query)
+		return err
+	})
+
+	if err != nil {
+		showError(fmt.Sprintf("Search visited error: %v", err))
+		return
+	}
+
+	// Check if no results found
+	if len(restaurants) == 0 {
+		showNoResults("No visited restaurants found matching your search.")
+		return
+	}
+
+	// Format results for Alfred
+	items := make([]AlfredItem, 0, len(restaurants))
+	totalCount := len(restaurants)
+
+	for i, r := range restaurants {
+		// Get cuisine or set default value
+		cuisine := "Unknown cuisine"
+		if r.Cuisine != nil && *r.Cuisine != "" {
+			cuisine = *r.Cuisine
+		}
+
+		// Get location or set default value
+		location := "Unknown location"
+		if r.Location != nil && *r.Location != "" {
+			location = *r.Location
+		}
+
+		// Get restaurant name
+		restaurantName := "Unknown restaurant"
+		if r.Name != nil && *r.Name != "" {
+			restaurantName = *r.Name
+		}
+
+		// Add heart emoji to title for favorites
+		if r.IsFavorite {
+			restaurantName = restaurantName + " ❤️"
+		}
+
+		// Add visited emoji to title (always for visited search)
+		restaurantName = restaurantName + " ✅"
+
+		// Format award display with stars and year
+		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+
+		// Create counter prefix
+		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
+
+		// Get the appropriate URL based on OPEN_IN preference
+		openInURL := getOpenInURL(r)
+
+		// Create Alfred item
+		subtitle := fmt.Sprintf("%s | %s | %s | %s",
+			counter,
+			location,
+			award,
+			cuisine)
+
+		// Add visit date if available
+		if r.VisitedDate != nil && *r.VisitedDate != "" {
+			subtitle = fmt.Sprintf("Visited: %s | %s", *r.VisitedDate, subtitle)
+		}
+
+		item := AlfredItem{
+			UID:      fmt.Sprintf("restaurant-%d", r.ID),
+			Title:    restaurantName,
+			Subtitle: subtitle,
+			Arg:      fmt.Sprintf("%d", r.ID),
+			Valid:    true,
+			Variables: map[string]interface{}{
+				"restaurant_id":   r.ID,
+				"restaurant_name": restaurantName,
+				"OPEN_IN":         openInURL,
+				"search_query":    query,
+				"mode":            "visited",
 			},
 		}
 
@@ -605,6 +887,7 @@ func handleFavorites(database *sql.DB) {
 				"restaurant_id":   r.ID,
 				"restaurant_name": restaurantName,
 				"OPEN_IN":         openInURL,
+				"mode":            "favorites",
 			},
 		}
 
@@ -709,6 +992,7 @@ func handleVisited(database *sql.DB) {
 				"restaurant_id":   r.ID,
 				"restaurant_name": restaurantName,
 				"OPEN_IN":         openInURL,
+				"mode":            "visited",
 			},
 		}
 
@@ -851,6 +1135,10 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 	// Add award history items
 	for i, award := range awards {
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(len(awards)))
+
+		// Get mode from environment variable to preserve it
+		mode := os.Getenv("mode")
+
 		item := AlfredItem{
 			Title:    fmt.Sprintf("%d: %s", award.Year, award.Distinction),
 			Subtitle: fmt.Sprintf("%s | Year %d | CMD+ALT to go back", counter, award.Year),
@@ -859,6 +1147,7 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 			Variables: map[string]interface{}{
 				"restaurant_id": restaurant.ID,
 				"search_query":  searchQuery,
+				"mode":          mode,
 			},
 		}
 		items = append(items, item)
@@ -920,6 +1209,34 @@ func formatAwardWithStarsAndYear(award *string, year *int) string {
 	}
 
 	return formattedAward
+}
+
+// handleUpdateDatabase handles the database update command
+func handleUpdateDatabase(dbPath string) {
+	fmt.Fprintf(os.Stderr, "[DEBUG] Starting database update process\n")
+	fmt.Fprintf(os.Stderr, "[DEBUG] Current database path: %s\n", dbPath)
+
+	err := db.UpdateDatabase(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Database update failed: %v\n", err)
+		showError(fmt.Sprintf("Database update failed: %v", err))
+		return
+	}
+
+	// Show success message
+	result := AlfredResult{
+		Items: []AlfredItem{
+			{
+				Title:    "✅ Database Update Completed",
+				Subtitle: "Your Michelin database has been successfully updated with the latest data",
+				Valid:    false,
+			},
+		},
+	}
+
+	if err := printJSON(result); err != nil {
+		showError(fmt.Sprintf("Error formatting update result: %v", err))
+	}
 }
 
 // printJSON marshals and prints JSON to stdout

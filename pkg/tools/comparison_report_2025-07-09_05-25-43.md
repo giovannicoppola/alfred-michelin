@@ -1,0 +1,97 @@
+# Michelin Database vs CSV Comparison Report
+
+**Generated:** 2025-07-09 05:25:43
+
+## 📊 Summary Statistics
+
+| Metric | Count |
+|--------|-------|
+| Restaurants in Database | 18112 |
+| Restaurants in CSV | 18157 |
+| Missing from Database | 86 |
+| Missing from CSV | 41 |
+| **Total Discrepancies** | **127** |
+
+## 📂 Source Files
+
+- **Database:** /Users/giovanni/Library/Application Support/Alfred/Workflow Data/com.giovanni.alfred-michelin/michelin new.db
+- **CSV Export:** /Users/giovanni/gDrive/GitHub repos/alfred-michelin/database builder/michelin-my-maps-3.2.1/data/michelin_my_maps.csv
+
+## 🔍 Analysis Results
+
+### 🆕 Restaurants Missing from Database (86)
+
+*These restaurants exist in the CSV export but not in your database. They are likely new additions to the Michelin Guide that should be imported.*
+
+| Name | Location | Award | Action |
+|------|----------|--------|--------|
+| La Durée | Izegem, Belgium | 2 Stars | ➕ Add to DB |
+| Het Gebaar | Antwerpen, Belgium | 1 Star | ➕ Add to DB |
+| Souvenir | Gent, Belgium | 1 Star | ➕ Add to DB |
+| EntreNos | Miami, USA | 1 Star | ➕ Add to DB |
+| La Vieille Tour | Cellettes, France | 1 Star | ➕ Add to DB |
+| La Table de Tourrel | Saint-Rémy-de-Provence, France | 1 Star | ➕ Add to DB |
+| Pourquoi Pas | Dinard, France | 1 Star | ➕ Add to DB |
+| Hiramatsu Kodaiji | Kyoto, Japan | 1 Star | ➕ Add to DB |
+| Zuicho | Hong Kong, Hong Kong SAR China | 1 Star | ➕ Add to DB |
+| Ling Long | Beijing, China Mainland | 1 Star | ➕ Add to DB |
+| La Maison de Win | Taichung, Taiwan | 1 Star | ➕ Add to DB |
+| Sushi Ginza Onodera | West Hollywood, USA | 1 Star | ➕ Add to DB |
+| La Table de Léo | Saint-Avit-Sénieur, France | Bib Gourmand | ➕ Add to DB |
+| Maison Vidal - Le Bistrot de Justin | Saint-Julien-Chapteuil, France | Bib Gourmand | ➕ Add to DB |
+| FAGP | Seoul, South Korea | Bib Gourmand | ➕ Add to DB |
+| Sharikimon Chawambu | Tokyo, Japan | Bib Gourmand | ➕ Add to DB |
+| Bistro TWO | Roermond, Netherlands | Bib Gourmand | ➕ Add to DB |
+| iTalico | Palo Alto, USA | Bib Gourmand | ➕ Add to DB |
+| Father’s Office | Los Angeles, USA | Bib Gourmand | ➕ Add to DB |
+| Kettner Exchange | San Diego, USA | Bib Gourmand | ➕ Add to DB |
+
+*... and 66 more restaurants. See `missing_from_database_2025-07-09_05-25-43.csv` for the complete list.*
+
+**Recommendation:** Import these restaurants to keep your database current with the latest Michelin Guide.
+
+### 🗑️ Restaurants Missing from CSV (41)
+
+*These restaurants exist in your database but not in the CSV export. They may have been removed from the Michelin Guide or lost their status.*
+
+| Name | Location | Award | Action |
+|------|----------|--------|--------|
+| Alice, le bistrot - Le Manoir de la Mortière | Les Sables-d'Olonne, France | Selected Restaurants | ⚠️ Review |
+| Argile | Paris, France | Selected Restaurants | ⚠️ Review |
+| Chez Pierrette | Meilhan-sur-Garonne, France | Selected Restaurants | ⚠️ Review |
+| Franchino | Praiano, Italy | Selected Restaurants | ⚠️ Review |
+| Song Yuan | Guangzhou, China Mainland | Bib Gourmand | ⚠️ Review |
+| Nannini | Livorno, Italy | Selected Restaurants | ⚠️ Review |
+| Brutal | Lyon, France | Selected Restaurants | ⚠️ Review |
+| Il Salotto Atelier Gourmet | Rapallo, Italy | Selected Restaurants | ⚠️ Review |
+| Taste Soar × Da Tou Hui | Guangzhou, China Mainland | Bib Gourmand | ⚠️ Review |
+| Delightful House | Guangzhou, China Mainland | Selected Restaurants | ⚠️ Review |
+| Taverna e' Mare | Torre del Greco, Italy | Selected Restaurants | ⚠️ Review |
+| La Petite Chartreuse | La Tronche, France | Selected Restaurants | ⚠️ Review |
+| Come in Corte Aurora | Teolo, Italy | Selected Restaurants | ⚠️ Review |
+| Luna | Bordeaux, France | Selected Restaurants | ⚠️ Review |
+| Plant-Based Kitchen | Guangzhou, China Mainland | Selected Restaurants | ⚠️ Review |
+| Cascina Moro | Locate di Triulzi, Italy | Selected Restaurants | ⚠️ Review |
+| Krevette | Lille, France | Selected Restaurants | ⚠️ Review |
+| Le Bon Abri | Hillion, France | Selected Restaurants | ⚠️ Review |
+| Gli Uffici | Cagliari, Italy | Selected Restaurants | ⚠️ Review |
+| Amandus | Mandello del Lario, Italy | Selected Restaurants | ⚠️ Review |
+
+*... and 21 more restaurants. See `missing_from_csv_2025-07-09_05-25-43.csv` for the complete list.*
+
+**Recommendation:** Review these restaurants to determine if they should be archived or removed from your database.
+
+## 📋 Action Items
+
+1. **Import 86 new restaurants** from `missing_from_database_2025-07-09_05-25-43.csv`
+2. **Review 41 potentially delisted restaurants** from `missing_from_csv_2025-07-09_05-25-43.csv`
+
+## 📁 Output Files
+
+- **missing_from_database_2025-07-09_05-25-43.csv** - Restaurants to import into database
+- **missing_from_csv_2025-07-09_05-25-43.csv** - Restaurants to review for potential removal
+- **comparison_report_2025-07-09_05-25-43.md** - This analysis report
+
+---
+
+*Generated by Alfred Michelin Database Comparison Tool*

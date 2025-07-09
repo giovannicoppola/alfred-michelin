@@ -45,6 +45,11 @@ test-scrape-conservative:	## scrape 5 random restaurants with conservative mode 
 scrape-conservative:	## scrape all data with conservative mode (8-16s delays) to avoid 403 errors.
 	@go run cmd/mym/mym.go scrape -conservative
 
+.PHONY: scrape-csv
+scrape-csv:	## scrape specific restaurants from CSV file. Usage: make scrape-csv CSV=path/to/file.csv
+	@if [ -z "$(CSV)" ]; then echo "Usage: make scrape-csv CSV=path/to/file.csv"; exit 1; fi
+	@go run cmd/mym/mym.go scrape -csv $(CSV) -log debug
+
 .PHONY: docker-build
 docker-build:## build scraper docker image.
 	$(DOCKER) build -t $(NAME) . -f docker/scraper/Dockerfile

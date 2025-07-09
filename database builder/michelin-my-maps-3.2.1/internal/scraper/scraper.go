@@ -2,8 +2,10 @@ package scraper
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -226,6 +228,242 @@ func (s *Scraper) getTotalCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.processedCount + s.queuedCount
+}
+
+// CSVRestaurant represents a restaurant record from CSV file
+type CSVRestaurant struct {
+	Name     string
+	Location string
+	URL      string
+	Cuisine  string
+	Award    string
+	Price    string
+	Address  string
+}
+
+// parseCSV reads and parses the CSV file containing restaurant information
+func (s *Scraper) parseCSV(csvFile string) ([]CSVRestaurant, error) {
+	file, err := os.Open(csvFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open CSV file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV file: %w", err)
+	}
+
+	if len(records) == 0 {
+		return nil, fmt.Errorf("CSV file is empty")
+	}
+
+	// Skip header row and parse data
+	var restaurants []CSVRestaurant
+	for i, record := range records[1:] { // Skip header
+		if len(record) < 7 {
+			log.WithFields(log.Fields{
+				"line":   i + 2, // +2 because we skip header and i starts at 0
+				"record": record,
+			}).Warn("skipping CSV row with insufficient columns")
+			continue
+		}
+
+		restaurant := CSVRestaurant{
+			Name:     strings.TrimSpace(record[0]),
+			Location: strings.TrimSpace(record[1]),
+			URL:      strings.TrimSpace(record[2]),
+			Cuisine:  strings.TrimSpace(record[3]),
+			Award:    strings.TrimSpace(record[4]),
+			Price:    strings.TrimSpace(record[5]),
+			Address:  strings.TrimSpace(record[6]),
+		}
+
+		// Validate URL
+		if restaurant.URL == "" {
+			log.WithFields(log.Fields{
+				"line": i + 2,
+				"name": restaurant.Name,
+			}).Warn("skipping restaurant with empty URL")
+			continue
+		}
+
+		// Ensure URL contains Michelin guide domain
+		if !strings.Contains(restaurant.URL, "guide.michelin.com") {
+			log.WithFields(log.Fields{
+				"line": i + 2,
+				"name": restaurant.Name,
+				"url":  restaurant.URL,
+			}).Warn("skipping restaurant with non-Michelin URL")
+			continue
+		}
+
+		restaurants = append(restaurants, restaurant)
+	}
+
+	return restaurants, nil
+}
+
+// RunFromCSV crawls specific restaurant information from CSV file URLs
+func (s *Scraper) RunFromCSV(ctx context.Context, csvFile string) error {
+	restaurants, err := s.parseCSV(csvFile)
+	if err != nil {
+		return fmt.Errorf("failed to parse CSV file: %w", err)
+	}
+
+	log.WithFields(log.Fields{"count": len(restaurants)}).Info("restaurants loaded from CSV")
+
+	if len(restaurants) == 0 {
+		return fmt.Errorf("no valid restaurants found in CSV file")
+	}
+
+	// Set up collectors
+	detailCollector := s.client.CreateDetailCollector()
+	s.setupCSVDetailHandlers(ctx, detailCollector, restaurants)
+
+	// Add all restaurant URLs to be scraped
+	for i, restaurant := range restaurants {
+		// Respect MaxRestaurants limit if set
+		if s.config.MaxRestaurants > 0 && i >= s.config.MaxRestaurants {
+			log.WithFields(log.Fields{
+				"processed": i,
+				"limit":     s.config.MaxRestaurants,
+				"total":     len(restaurants),
+			}).Info("reached restaurant limit for CSV processing")
+			break
+		}
+
+		log.WithFields(log.Fields{
+			"index": i + 1,
+			"total": len(restaurants),
+			"name":  restaurant.Name,
+			"url":   restaurant.URL,
+		}).Info("queueing restaurant from CSV")
+
+		// Create a new context for each restaurant with CSV data
+		requestCtx := colly.NewContext()
+		requestCtx.Put("csv_name", restaurant.Name)
+		requestCtx.Put("csv_location", restaurant.Location)
+		requestCtx.Put("csv_cuisine", restaurant.Cuisine)
+		requestCtx.Put("csv_award", restaurant.Award)
+		requestCtx.Put("csv_price", restaurant.Price)
+		requestCtx.Put("csv_address", restaurant.Address)
+
+		// Parse location for lat/lng if available
+		if restaurant.Location != "" {
+			requestCtx.Put("location", restaurant.Location)
+		}
+
+		err := detailCollector.Request("GET", restaurant.URL, nil, requestCtx, nil)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"error": err,
+				"url":   restaurant.URL,
+				"name":  restaurant.Name,
+			}).Error("failed to queue restaurant URL")
+		}
+	}
+
+	// Start the scraping process
+	s.client.GetQueue().Run(detailCollector)
+	log.Info("CSV scraping completed")
+	return nil
+}
+
+// setupCSVDetailHandlers sets up handlers specifically for CSV-based scraping
+func (s *Scraper) setupCSVDetailHandlers(ctx context.Context, detailCollector *colly.Collector, restaurants []CSVRestaurant) {
+	detailCollector.OnRequest(func(r *colly.Request) {
+		attempt := r.Ctx.GetAny("attempt")
+		if attempt == nil {
+			r.Ctx.Put("attempt", 1)
+			attempt = 1
+		}
+		log.WithFields(log.Fields{
+			"attempt": attempt,
+			"url":     r.URL.String(),
+			"name":    r.Ctx.Get("csv_name"),
+		}).Debug("fetching restaurant detail from CSV")
+	})
+
+	detailCollector.OnXML(restaurantAwardPublishedYearXPath, func(e *colly.XMLElement) {
+		jsonLD := e.Text
+		year, err := parser.ParsePublishedYearFromJSONLD(jsonLD)
+		if err == nil && year > 0 {
+			e.Request.Ctx.Put("jsonLD", jsonLD)
+			e.Request.Ctx.Put("publishedYear", year)
+		}
+	})
+
+	// Extract details of each restaurant and save to database
+	detailCollector.OnXML(restaurantDetailXPath, func(e *colly.XMLElement) {
+		data := s.extractRestaurantData(e)
+
+		// Use CSV data as fallback for missing information
+		if csvName := e.Request.Ctx.Get("csv_name"); csvName != "" && data.Name == "" {
+			data.Name = csvName
+		}
+		if csvLocation := e.Request.Ctx.Get("csv_location"); csvLocation != "" && data.Location == "" {
+			data.Location = csvLocation
+		}
+
+		// Handle missing coordinates by providing defaults for CSV mode
+		if data.Latitude == "" {
+			data.Latitude = "0.0"
+			log.WithFields(log.Fields{
+				"url":      data.URL,
+				"csv_name": e.Request.Ctx.Get("csv_name"),
+			}).Debug("no latitude found, using default 0.0")
+		}
+		if data.Longitude == "" {
+			data.Longitude = "0.0"
+			log.WithFields(log.Fields{
+				"url":      data.URL,
+				"csv_name": e.Request.Ctx.Get("csv_name"),
+			}).Debug("no longitude found, using default 0.0")
+		}
+
+		// Handle missing description which is also required
+		if data.Description == "" {
+			data.Description = "Restaurant information from Michelin Guide"
+			log.WithFields(log.Fields{
+				"url":      data.URL,
+				"csv_name": e.Request.Ctx.Get("csv_name"),
+			}).Debug("no description found, using default")
+		}
+
+		log.WithFields(log.Fields{
+			"distinction": data.Distinction,
+			"name":        data.Name,
+			"url":         data.URL,
+			"csv_name":    e.Request.Ctx.Get("csv_name"),
+		}).Debug("restaurant detail extracted from CSV")
+
+		if err := s.repository.UpsertRestaurantWithAward(ctx, data); err != nil {
+			log.WithFields(log.Fields{
+				"error":    err,
+				"url":      data.URL,
+				"csv_name": e.Request.Ctx.Get("csv_name"),
+			}).Error("failed to upsert restaurant award from CSV")
+		} else {
+			// Update processed count
+			s.mu.Lock()
+			s.processedCount++
+			currentProcessed := s.processedCount
+			s.mu.Unlock()
+
+			log.WithFields(log.Fields{
+				"distinction": data.Distinction,
+				"name":        data.Name,
+				"url":         data.URL,
+				"year":        data.Year,
+				"processed":   currentProcessed,
+				"csv_name":    e.Request.Ctx.Get("csv_name"),
+			}).Info("upserted restaurant award from CSV")
+		}
+	})
+
+	detailCollector.OnError(s.createErrorHandler())
 }
 
 func (s *Scraper) setupMainHandlers(ctx context.Context, collector *colly.Collector, q *queue.Queue, detailCollector *colly.Collector) {
