@@ -350,13 +350,17 @@ func handleSearch(database *sql.DB, query string) {
 		}
 
 		// Add heart emoji to title for favorites
+		favoriteEmoji := "❤️"
 		if r.IsFavorite {
 			restaurantName = restaurantName + " ❤️"
+			favoriteEmoji = "💔"
 		}
 
 		// Add visited emoji to title if needed
+		visitedEmoji := "✅"
 		if r.IsVisited {
 			restaurantName = restaurantName + " ✅"
+			visitedEmoji = "❌"
 		}
 
 		// Format award display with stars and year
@@ -386,6 +390,8 @@ func handleSearch(database *sql.DB, query string) {
 				"OPEN_IN":         openInURL,
 				"search_query":    query,
 				"mode":            "",
+				"favorite_emoji":  favoriteEmoji,
+				"visited_emoji":   visitedEmoji,
 			},
 		}
 
@@ -1142,7 +1148,7 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 		item := AlfredItem{
 			Title:    fmt.Sprintf("%d: %s", award.Year, award.Distinction),
 			Subtitle: fmt.Sprintf("%s | Year %d | CMD+ALT to go back", counter, award.Year),
-			Arg:      fmt.Sprintf("%d", restaurant.ID),
+			Arg:      "",
 			Valid:    true,
 			Variables: map[string]interface{}{
 				"restaurant_id": restaurant.ID,

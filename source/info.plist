@@ -10,26 +10,6 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</string>
-				<key>modifiers</key>
-				<integer>262144</integer>
-				<key>modifiersubtext</key>
-				<string>Toggle favorite ❤️</string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
-				<string>B89F7C35-B65A-4F9C-9C24-0FFDFEAAA9F1</string>
-				<key>modifiers</key>
-				<integer>524288</integer>
-				<key>modifiersubtext</key>
-				<string>Toggle Visited ✅️</string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
 				<string>A77C5978-3BA8-4159-ABDA-233532AB4E30</string>
 				<key>modifiers</key>
 				<integer>0</integer>
@@ -40,37 +20,48 @@
 			</dict>
 			<dict>
 				<key>destinationuid</key>
-				<string>C08CBB9C-BB75-4814-8F76-CCB045690478</string>
+				<string>B89F7C35-B65A-4F9C-9C24-0FFDFEAAA9F1</string>
 				<key>modifiers</key>
-				<integer>1048576</integer>
+				<integer>524288</integer>
 				<key>modifiersubtext</key>
-				<string>Show Award history 🏅</string>
+				<string>Toggle Visited {var:visitedEmoji}</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
 			<dict>
 				<key>destinationuid</key>
-				<string>8F5FD263-68F7-4B57-9E0F-1D4A414B3EB9</string>
+				<string>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</string>
 				<key>modifiers</key>
-				<integer>1048576</integer>
+				<integer>262144</integer>
 				<key>modifiersubtext</key>
-				<string>Show historyyy</string>
+				<string>Toggle favorite {var:favoriteEmoji}</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
 			<dict>
 				<key>destinationuid</key>
-				<string>AWARD-HISTORY-FILTER-UUID</string>
+				<string>85143491-24AE-41B8-B7B7-C095D1DB0A68</string>
 				<key>modifiers</key>
-				<integer>131072</integer>
+				<integer>1048576</integer>
 				<key>modifiersubtext</key>
-				<string>Show Award History (SHIFT)</string>
+				<string>Show Award history 🏅🏆️</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
 		</array>
-		<key>5B204DEA-BC95-4EE4-BAA4-76E271A1BA77</key>
-		<array/>
+		<key>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>F4130124-75E6-46B0-93CF-0CF8AA4C28DB</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</key>
 		<array>
 			<dict>
@@ -107,56 +98,28 @@
 				<false/>
 			</dict>
 		</array>
+		<key>825D446C-98A1-46FC-BA16-60854947B30B</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>BF83B6EC-FD6C-41D1-B5D0-BD7178CDA4E9</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>85143491-24AE-41B8-B7B7-C095D1DB0A68</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>F521F24B-2966-469C-9510-0BC915C6C37A</string>
+				<string>7146317A-BD7F-489C-A78D-57A0DA858AE3</string>
 				<key>modifiers</key>
 				<integer>1572864</integer>
 				<key>modifiersubtext</key>
-				<string>back</string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>8F5FD263-68F7-4B57-9E0F-1D4A414B3EB9</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>C08CBB9C-BB75-4814-8F76-CCB045690478</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>9D51B1D1-D8E5-48FE-B689-9B99C5F334B6</key>
-		<array/>
-		<key>AWARD-HISTORY-FILTER-UUID</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>7FE62936-C125-48A2-9857-879B401B9074</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>AWARD-HISTORY-SCRIPT-UUID</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>5B204DEA-BC95-4EE4-BAA4-76E271A1BA77</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
+				<string>⬅️back</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -188,57 +151,41 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>8F5FD263-68F7-4B57-9E0F-1D4A414B3EB9</string>
+				<string>836EA27F-6C20-4602-9597-D163AA7C8EEC</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>88562678-F1C5-4DD5-B5EC-12034506A54B</string>
+				<key>modifiers</key>
+				<integer>524288</integer>
+				<key>modifiersubtext</key>
+				<string>Toggle Visited {var:visitedEmoji}</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>8F19B829-B2E3-4841-B4F0-300CB2F02183</string>
+				<key>modifiers</key>
+				<integer>262144</integer>
+				<key>modifiersubtext</key>
+				<string>Toggle favorite {var:favoriteEmoji}</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>BEFBFB73-3B67-461D-AF82-E8C72811F31D</string>
 				<key>modifiers</key>
 				<integer>1048576</integer>
 				<key>modifiersubtext</key>
-				<string>show historyyyy</string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
-				<string>5B204DEA-BC95-4EE4-BAA4-76E271A1BA77</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>C08CBB9C-BB75-4814-8F76-CCB045690478</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>85143491-24AE-41B8-B7B7-C095D1DB0A68</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
-		<key>C4ADAB6A-8C7D-4555-9C98-76D91C027348</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>AWARD-HISTORY-SCRIPT-UUID</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-			<dict>
-				<key>destinationuid</key>
-				<string>7FE62936-C125-48A2-9857-879B401B9074</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
+				<string>award history</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -247,7 +194,7 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>89CF4FEB-7AC5-4DCE-AD02-B01C37A03F45</string>
+				<string>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -255,12 +202,42 @@
 				<key>vitoclose</key>
 				<false/>
 			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>D6E17A5A-14E9-4B08-9329-4AB936FD14D3</string>
+				<key>modifiers</key>
+				<integer>524288</integer>
+				<key>modifiersubtext</key>
+				<string>Toggle Visited {var:visitedEmoji}</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>AC82E1ED-1160-48DA-A63A-11F85AC88D5A</string>
+				<key>modifiers</key>
+				<integer>262144</integer>
+				<key>modifiersubtext</key>
+				<string>Toggle favorite {var:favoriteEmoji}</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>ECA62F22-F94B-4CC8-A102-0F495A8D7C39</string>
+				<key>modifiers</key>
+				<integer>1048576</integer>
+				<key>modifiersubtext</key>
+				<string>award history</string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
 		</array>
-		<key>F521F24B-2966-469C-9510-0BC915C6C37A</key>
+		<key>F67815C1-2ABE-4D59-824E-B70F9BFD6CDB</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>7146317A-BD7F-489C-A78D-57A0DA858AE3</string>
+				<string>0F8E283B-B3A5-4A38-BD5A-64CDEBA6DBE2</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -288,7 +265,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>script</key>
-				<string>./michelin toggle-favorite "$1"</string>
+				<string>open "$OPEN_IN"</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -296,10 +273,15 @@
 				<key>type</key>
 				<integer>0</integer>
 			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>openURL</string>
+			</dict>
 			<key>type</key>
 			<string>alfred.workflow.action.script</string>
 			<key>uid</key>
-			<string>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</string>
+			<string>A77C5978-3BA8-4159-ABDA-233532AB4E30</string>
 			<key>version</key>
 			<integer>2</integer>
 		</dict>
@@ -385,6 +367,37 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>hotstring</key>
+				<string></string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>F67815C1-2ABE-4D59-824E-B70F9BFD6CDB</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>concurrently</key>
 				<false/>
 				<key>escaping</key>
@@ -397,6 +410,11 @@
 				<string></string>
 				<key>type</key>
 				<integer>0</integer>
+			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>visited</string>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.action.script</string>
@@ -413,7 +431,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>script</key>
-				<string>open "$OPEN_IN"</string>
+				<string>./michelin toggle-favorite "$1"</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -421,27 +439,34 @@
 				<key>type</key>
 				<integer>0</integer>
 			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>favorite</string>
+			</dict>
 			<key>type</key>
 			<string>alfred.workflow.action.script</string>
 			<key>uid</key>
-			<string>A77C5978-3BA8-4159-ABDA-233532AB4E30</string>
+			<string>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</string>
 			<key>version</key>
 			<integer>2</integer>
 		</dict>
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>argument</key>
-				<string>{var:restaurant_name}</string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict/>
+				<key>externaltriggerid</key>
+				<string>main_search</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
+			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
-			<string>C08CBB9C-BB75-4814-8F76-CCB045690478</string>
+			<string>4AFD0239-D2EA-4394-A9B6-0D59FFE494F1</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -461,33 +486,6 @@
 			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
 			<string>7146317A-BD7F-489C-A78D-57A0DA858AE3</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>externaltriggerid</key>
-				<string>main_search</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>0D2F33FF-5998-4C76-8306-F8FCD1B679F3</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.junction</string>
-			<key>uid</key>
-			<string>8F5FD263-68F7-4B57-9E0F-1D4A414B3EB9</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -533,29 +531,17 @@
 				<key>withspace</key>
 				<false/>
 			</dict>
+			<key>inboundconfig</key>
+			<dict>
+				<key>externalid</key>
+				<string>listAwards</string>
+			</dict>
 			<key>type</key>
 			<string>alfred.workflow.input.scriptfilter</string>
 			<key>uid</key>
 			<string>85143491-24AE-41B8-B7B7-C095D1DB0A68</string>
 			<key>version</key>
 			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>argument</key>
-				<string>{query}</string>
-				<key>passthroughargument</key>
-				<false/>
-				<key>variables</key>
-				<dict/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.argument</string>
-			<key>uid</key>
-			<string>F521F24B-2966-469C-9510-0BC915C6C37A</string>
-			<key>version</key>
-			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -573,6 +559,105 @@
 			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
 			<string>1375C0DD-7427-4D82-9937-5202BDC1AB6E</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string>{var:OPEN_IN}</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>836EA27F-6C20-4602-9597-D163AA7C8EEC</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>visited</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>88562678-F1C5-4DD5-B5EC-12034506A54B</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>favorite</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>8F19B829-B2E3-4841-B4F0-300CB2F02183</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string>{query}</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>0EDD7788-C956-48A6-9583-D6A07CB80639</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>listAwards</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>BEFBFB73-3B67-461D-AF82-E8C72811F31D</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -628,65 +713,33 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>externaltriggerid</key>
-				<string>main_search</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>4AFD0239-D2EA-4394-A9B6-0D59FFE494F1</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>concurrently</key>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
 				<false/>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>script</key>
-				<string>./michelin award-history "$1"</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
+				<key>focusedappvariablename</key>
 				<string></string>
-				<key>type</key>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>hotstring</key>
+				<string></string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
 				<integer>0</integer>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.action.script</string>
+			<string>alfred.workflow.trigger.hotkey</string>
 			<key>uid</key>
-			<string>AWARD-HISTORY-SCRIPT-UUID</string>
+			<string>825D446C-98A1-46FC-BA16-60854947B30B</string>
 			<key>version</key>
 			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string>{query}</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
-			<key>uid</key>
-			<string>0EDD7788-C956-48A6-9583-D6A07CB80639</string>
-			<key>version</key>
-			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -740,6 +793,77 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>browser</key>
+				<string></string>
+				<key>skipqueryencode</key>
+				<false/>
+				<key>skipvarencode</key>
+				<false/>
+				<key>spaces</key>
+				<string></string>
+				<key>url</key>
+				<string>{var:OPEN_IN}</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.openurl</string>
+			<key>uid</key>
+			<string>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>visited</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>D6E17A5A-14E9-4B08-9329-4AB936FD14D3</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>hotstring</key>
+				<string></string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -789,161 +913,40 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string></string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
-			<key>uid</key>
-			<string>89CF4FEB-7AC5-4DCE-AD02-B01C37A03F45</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.junction</string>
-			<key>uid</key>
-			<string>9D51B1D1-D8E5-48FE-B689-9B99C5F334B6</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>lastpathcomponent</key>
-				<false/>
-				<key>onlyshowifquerypopulated</key>
-				<false/>
-				<key>removeextension</key>
-				<false/>
-				<key>text</key>
-				<string>{query}</string>
-				<key>title</key>
-				<string>Restaurant Updated</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.notification</string>
-			<key>uid</key>
-			<string>5B204DEA-BC95-4EE4-BAA4-76E271A1BA77</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>conditions</key>
-				<array>
-					<dict>
-						<key>inputstring</key>
-						<string>{var:action}</string>
-						<key>matchcasesensitive</key>
-						<false/>
-						<key>matchmode</key>
-						<integer>0</integer>
-						<key>matchstring</key>
-						<string>toggle-favorite</string>
-						<key>outputlabel</key>
-						<string>Toggle Favorite</string>
-						<key>uid</key>
-						<string>1702D02F-8ED1-4A26-A3F0-F9E8F38AE0F4</string>
-					</dict>
-					<dict>
-						<key>inputstring</key>
-						<string>{var:action}</string>
-						<key>matchcasesensitive</key>
-						<false/>
-						<key>matchmode</key>
-						<integer>0</integer>
-						<key>matchstring</key>
-						<string>toggle-visited</string>
-						<key>outputlabel</key>
-						<string>Toggle Visited</string>
-						<key>uid</key>
-						<string>7D37EFBE-BF44-41C4-9A32-EFE6BF8BE60A</string>
-					</dict>
-					<dict>
-						<key>inputstring</key>
-						<string>{var:action}</string>
-						<key>matchcasesensitive</key>
-						<false/>
-						<key>matchmode</key>
-						<integer>0</integer>
-						<key>matchstring</key>
-						<string>award-history</string>
-						<key>outputlabel</key>
-						<string>Award History</string>
-						<key>uid</key>
-						<string>AWARD-HISTORY-CONDITION-UUID</string>
-					</dict>
-				</array>
-				<key>elselabel</key>
-				<string>Get Details</string>
-				<key>hideelse</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.conditional</string>
-			<key>uid</key>
-			<string>C4ADAB6A-8C7D-4555-9C98-76D91C027348</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
+				<key>externaltriggerid</key>
+				<string>favorite</string>
+				<key>passinputasargument</key>
 				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>1</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string></string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
+				<key>passvariables</key>
 				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>Loading award history...</string>
-				<key>script</key>
-				<string>./michelin award-history "$1"</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string>View award history for this restaurant</string>
-				<key>title</key>
-				<string>Restaurant Award History</string>
-				<key>type</key>
-				<integer>0</integer>
-				<key>withspace</key>
-				<false/>
+				<key>workflowbundleid</key>
+				<string>self</string>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
+			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
-			<string>AWARD-HISTORY-FILTER-UUID</string>
+			<string>AC82E1ED-1160-48DA-A63A-11F85AC88D5A</string>
 			<key>version</key>
-			<integer>3</integer>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>listAwards</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>ECA62F22-F94B-4CC8-A102-0F495A8D7C39</string>
+			<key>version</key>
+			<integer>1</integer>
 		</dict>
 	</array>
 	<key>readme</key>
@@ -973,166 +976,209 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 - Go 1.15 or later (for development)</string>
 	<key>uidata</key>
 	<dict>
-		<key>0D2F33FF-5998-4C76-8306-F8FCD1B679F3</key>
-		<dict>
-			<key>xpos</key>
-			<real>790</real>
-			<key>ypos</key>
-			<real>190</real>
-		</dict>
 		<key>0EDD7788-C956-48A6-9583-D6A07CB80639</key>
 		<dict>
 			<key>xpos</key>
-			<real>1135</real>
+			<real>1710</real>
 			<key>ypos</key>
-			<real>400</real>
+			<real>595</real>
 		</dict>
 		<key>0F8E283B-B3A5-4A38-BD5A-64CDEBA6DBE2</key>
 		<dict>
 			<key>xpos</key>
-			<real>30</real>
+			<real>280</real>
 			<key>ypos</key>
-			<real>65</real>
+			<real>40</real>
 		</dict>
 		<key>1375C0DD-7427-4D82-9937-5202BDC1AB6E</key>
 		<dict>
 			<key>xpos</key>
-			<real>1145</real>
+			<real>1150</real>
 			<key>ypos</key>
-			<real>235</real>
+			<real>280</real>
 		</dict>
 		<key>4AFD0239-D2EA-4394-A9B6-0D59FFE494F1</key>
 		<dict>
 			<key>xpos</key>
-			<real>1510</real>
+			<real>1150</real>
 			<key>ypos</key>
-			<real>280</real>
+			<real>195</real>
 		</dict>
-		<key>5B204DEA-BC95-4EE4-BAA4-76E271A1BA77</key>
+		<key>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</key>
 		<dict>
 			<key>xpos</key>
-			<real>1040</real>
+			<real>70</real>
 			<key>ypos</key>
-			<real>565</real>
+			<real>865</real>
+		</dict>
+		<key>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</key>
+		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
+			<key>xpos</key>
+			<real>465</real>
+			<key>ypos</key>
+			<real>790</real>
 		</dict>
 		<key>6795AE46-BC1D-4E60-997F-026AA72EC95F</key>
 		<dict>
 			<key>xpos</key>
-			<real>1145</real>
+			<real>1130</real>
 			<key>ypos</key>
-			<real>25</real>
+			<real>15</real>
 		</dict>
 		<key>6A35BEDD-5F92-4027-99A0-F5A7E608C3CA</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>1</integer>
+			<key>note</key>
+			<string>❤️ favorite</string>
 			<key>xpos</key>
-			<real>780</real>
+			<real>795</real>
 			<key>ypos</key>
-			<real>15</real>
+			<real>190</real>
 		</dict>
 		<key>7146317A-BD7F-489C-A78D-57A0DA858AE3</key>
 		<dict>
 			<key>xpos</key>
-			<real>790</real>
+			<real>1150</real>
 			<key>ypos</key>
-			<real>185</real>
+			<real>235</real>
 		</dict>
 		<key>7FE62936-C125-48A2-9857-879B401B9074</key>
 		<dict>
 			<key>xpos</key>
-			<real>965</real>
+			<real>1185</real>
 			<key>ypos</key>
-			<real>400</real>
+			<real>650</real>
+		</dict>
+		<key>825D446C-98A1-46FC-BA16-60854947B30B</key>
+		<dict>
+			<key>xpos</key>
+			<real>70</real>
+			<key>ypos</key>
+			<real>640</real>
+		</dict>
+		<key>836EA27F-6C20-4602-9597-D163AA7C8EEC</key>
+		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
+			<key>xpos</key>
+			<real>485</real>
+			<key>ypos</key>
+			<real>470</real>
 		</dict>
 		<key>85143491-24AE-41B8-B7B7-C095D1DB0A68</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>2</integer>
+			<key>note</key>
+			<string>🏆️ award history</string>
 			<key>xpos</key>
-			<real>470</real>
+			<real>795</real>
 			<key>ypos</key>
-			<real>205</real>
+			<real>250</real>
 		</dict>
-		<key>89CF4FEB-7AC5-4DCE-AD02-B01C37A03F45</key>
+		<key>88562678-F1C5-4DD5-B5EC-12034506A54B</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>8</integer>
+			<key>note</key>
+			<string>✅️ visited</string>
 			<key>xpos</key>
-			<real>220</real>
+			<real>730</real>
 			<key>ypos</key>
-			<real>450</real>
+			<real>515</real>
 		</dict>
-		<key>8F5FD263-68F7-4B57-9E0F-1D4A414B3EB9</key>
+		<key>8F19B829-B2E3-4841-B4F0-300CB2F02183</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>1</integer>
 			<key>xpos</key>
-			<real>205</real>
+			<real>735</real>
 			<key>ypos</key>
-			<real>200</real>
-		</dict>
-		<key>9D51B1D1-D8E5-48FE-B689-9B99C5F334B6</key>
-		<dict>
-			<key>xpos</key>
-			<real>1115</real>
-			<key>ypos</key>
-			<real>550</real>
+			<real>570</real>
 		</dict>
 		<key>A77C5978-3BA8-4159-ABDA-233532AB4E30</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
+			<key>note</key>
+			<string>Open URL</string>
 			<key>xpos</key>
-			<real>1250</real>
+			<real>625</real>
 			<key>ypos</key>
-			<real>110</real>
+			<real>15</real>
 		</dict>
-		<key>AWARD-HISTORY-FILTER-UUID</key>
+		<key>AC82E1ED-1160-48DA-A63A-11F85AC88D5A</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>1</integer>
 			<key>xpos</key>
-			<real>660</real>
+			<real>670</real>
 			<key>ypos</key>
-			<real>675</real>
-		</dict>
-		<key>AWARD-HISTORY-SCRIPT-UUID</key>
-		<dict>
-			<key>xpos</key>
-			<real>665</real>
-			<key>ypos</key>
-			<real>325</real>
+			<real>905</real>
 		</dict>
 		<key>B89F7C35-B65A-4F9C-9C24-0FFDFEAAA9F1</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>8</integer>
+			<key>note</key>
+			<string>✅️ visited</string>
 			<key>xpos</key>
-			<real>945</real>
+			<real>795</real>
 			<key>ypos</key>
-			<real>100</real>
+			<real>145</real>
+		</dict>
+		<key>BEFBFB73-3B67-461D-AF82-E8C72811F31D</key>
+		<dict>
+			<key>colorindex</key>
+			<integer>2</integer>
+			<key>xpos</key>
+			<real>735</real>
+			<key>ypos</key>
+			<real>625</real>
 		</dict>
 		<key>BF83B6EC-FD6C-41D1-B5D0-BD7178CDA4E9</key>
 		<dict>
 			<key>xpos</key>
-			<real>40</real>
+			<real>275</real>
 			<key>ypos</key>
-			<real>245</real>
+			<real>640</real>
 		</dict>
-		<key>C08CBB9C-BB75-4814-8F76-CCB045690478</key>
+		<key>D6E17A5A-14E9-4B08-9329-4AB936FD14D3</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>8</integer>
+			<key>note</key>
+			<string>✅️ visited</string>
 			<key>xpos</key>
-			<real>360</real>
-			<key>ypos</key>
-			<real>180</real>
-		</dict>
-		<key>C4ADAB6A-8C7D-4555-9C98-76D91C027348</key>
-		<dict>
-			<key>xpos</key>
-			<real>355</real>
-			<key>ypos</key>
 			<real>670</real>
+			<key>ypos</key>
+			<real>860</real>
+		</dict>
+		<key>ECA62F22-F94B-4CC8-A102-0F495A8D7C39</key>
+		<dict>
+			<key>colorindex</key>
+			<integer>2</integer>
+			<key>xpos</key>
+			<real>670</real>
+			<key>ypos</key>
+			<real>960</real>
 		</dict>
 		<key>F4130124-75E6-46B0-93CF-0CF8AA4C28DB</key>
 		<dict>
 			<key>xpos</key>
-			<real>30</real>
+			<real>270</real>
 			<key>ypos</key>
-			<real>435</real>
+			<real>865</real>
 		</dict>
-		<key>F521F24B-2966-469C-9510-0BC915C6C37A</key>
+		<key>F67815C1-2ABE-4D59-824E-B70F9BFD6CDB</key>
 		<dict>
 			<key>xpos</key>
-			<real>690</real>
+			<real>40</real>
 			<key>ypos</key>
-			<real>230</real>
+			<real>50</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -1170,6 +1216,25 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<string>popupbutton</string>
 			<key>variable</key>
 			<string>OPEN_IN</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string></string>
+			</dict>
+			<key>description</key>
+			<string>Include restaurants previously listed in the Michelin Guide?</string>
+			<key>label</key>
+			<string>Include former?</string>
+			<key>type</key>
+			<string>checkbox</string>
+			<key>variable</key>
+			<string>INCLUDE_FORMER</string>
 		</dict>
 	</array>
 	<key>version</key>
