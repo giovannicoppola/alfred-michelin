@@ -24,6 +24,14 @@ const (
 	Autocomplete = "Autocomplete"
 )
 
+// Mod represents modifier-specific configuration
+type Mod struct {
+	Subtitle  string                 `json:"subtitle,omitempty"`
+	Arg       string                 `json:"arg,omitempty"`
+	Variables map[string]interface{} `json:"variables,omitempty"`
+	Valid     *bool                  `json:"valid,omitempty"`
+}
+
 // Alfred item structure for results
 type AlfredItem struct {
 	UID          string                 `json:"uid,omitempty"`
@@ -34,6 +42,7 @@ type AlfredItem struct {
 	Valid        bool                   `json:"valid"`
 	Autocomplete string                 `json:"autocomplete,omitempty"`
 	Variables    map[string]interface{} `json:"variables,omitempty"`
+	Mods         map[string]Mod         `json:"mods,omitempty"`
 }
 
 // Alfred results structure
@@ -350,21 +359,21 @@ func handleSearch(database *sql.DB, query string) {
 		}
 
 		// Add heart emoji to title for favorites
-		favoriteEmoji := "❤️"
+		favoriteEmoji := "❤️ add to favorites"
 		if r.IsFavorite {
 			restaurantName = restaurantName + " ❤️"
-			favoriteEmoji = "💔"
+			favoriteEmoji = "💔 remove from favorites"
 		}
 
 		// Add visited emoji to title if needed
-		visitedEmoji := "✅"
+		visitedEmoji := "✅ add to visited"
 		if r.IsVisited {
 			restaurantName = restaurantName + " ✅"
-			visitedEmoji = "❌"
+			visitedEmoji = "❌ remove from visited"
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -392,6 +401,14 @@ func handleSearch(database *sql.DB, query string) {
 				"mode":            "",
 				"favorite_emoji":  favoriteEmoji,
 				"visited_emoji":   visitedEmoji,
+			},
+			Mods: map[string]Mod{
+				"ctrl": {
+					Subtitle: favoriteEmoji,
+				},
+				"alt": {
+					Subtitle: visitedEmoji,
+				},
 			},
 		}
 
@@ -466,7 +483,7 @@ func handleSearchFavorites(database *sql.DB, query string) {
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -566,7 +583,7 @@ func handleSearchVisited(database *sql.DB, query string) {
 		restaurantName = restaurantName + " ✅"
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -653,7 +670,7 @@ func handleGetRestaurant(database *sql.DB, id int64) {
 	}
 
 	// Format award display with stars and year
-	award := formatAwardWithStarsAndYear(restaurant.CurrentAward, restaurant.CurrentAwardYear)
+	award := formatAwardWithStarsAndGreenStar(restaurant.CurrentAward, restaurant.CurrentAwardYear, restaurant.CurrentGreenStar)
 
 	// Create items for different actions
 	items := []AlfredItem{
@@ -870,7 +887,7 @@ func handleFavorites(database *sql.DB) {
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -968,7 +985,7 @@ func handleVisited(database *sql.DB) {
 		restaurantName = restaurantName + " ✅"
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndYear(r.CurrentAward, r.CurrentAwardYear)
+		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -1207,6 +1224,42 @@ func formatAwardWithStarsAndYear(award *string, year *int) string {
 		formattedAward = "Selected Restaurants"
 	} else {
 		formattedAward = *award
+	}
+
+	// Add year if available
+	if year != nil && *year > 0 {
+		formattedAward += fmt.Sprintf(" (%d)", *year)
+	}
+
+	return formattedAward
+}
+
+// formatAwardWithStarsAndGreenStar formats award display with stars replacing text, year in parentheses, and green star emoji
+func formatAwardWithStarsAndGreenStar(award *string, year *int, greenStar *bool) string {
+	if award == nil || *award == "" {
+		return "No Michelin distinction"
+	}
+
+	awardStr := strings.ToLower(*award)
+	formattedAward := ""
+
+	if strings.Contains(awardStr, "3 star") {
+		formattedAward = "⭐️⭐️⭐️"
+	} else if strings.Contains(awardStr, "2 star") {
+		formattedAward = "⭐️⭐️"
+	} else if strings.Contains(awardStr, "1 star") {
+		formattedAward = "⭐️"
+	} else if strings.Contains(awardStr, "bib gourmand") {
+		formattedAward = "Bib Gourmand"
+	} else if strings.Contains(awardStr, "selected restaurant") {
+		formattedAward = "Selected Restaurants"
+	} else {
+		formattedAward = *award
+	}
+
+	// Add green star emoji if present
+	if greenStar != nil && *greenStar {
+		formattedAward += " 🍀"
 	}
 
 	// Add year if available

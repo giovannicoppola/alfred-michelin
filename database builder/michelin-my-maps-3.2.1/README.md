@@ -6,6 +6,7 @@
 -   [Context](#context)
 -   [Disclaimer](#disclaimer)
 -   [Content](#content)
+-   [Dataset Processing](#dataset-processing)
 -   [Inspiration](#inspiration)
 -   [Contributing](#contributing)
 
@@ -37,6 +38,75 @@ The dataset contains a list of restaurants along with additional details (e.g. a
 | :------ | :------------------------------------------------------------------------- | :----------------------------- |
 | CSV     | [CSV](./data/michelin_my_maps.csv)                                         | Good'ol comma-separated values |
 | Kaggle  | [Kaggle](https://www.kaggle.com/ngshiheng/michelin-guide-restaurants-2021) | Data science community         |
+
+## Dataset Processing
+
+### 🔄 Updating Database with New CSV Files
+
+**For new CSV files (current or future Michelin Guide data):**
+
+```bash
+# Build the application
+go build -o mym cmd/mym/mym.go
+
+# Process all CSV files in data/HistoricalData/ directory
+./mym dataset -log debug
+
+# Process with limit for testing
+./mym dataset -limit 10 -log debug
+```
+
+### 📁 CSV File Organization
+
+Place your CSV files in the `data/HistoricalData/` directory with the expected format:
+- **Filename**: Should contain date (YYYY-MM-DD format) for proper chronological processing
+- **Format**: `Name,Address,Location,Price,Type,Longitude,Latitude,PhoneNumber,Url,WebsiteUrl,Classification`
+
+### 🧠 InGuide Logic (IMPORTANT)
+
+The system uses intelligent logic to manage restaurant guide status:
+
+#### **Recent CSV Files (≤1 month old)**
+- ✅ **New restaurants**: Get `InGuide=true` (currently in guide)
+- ✅ **Existing restaurants in CSV**: Keep `InGuide=true`, add awards
+- ⚠️ **Existing restaurants missing from CSV**: Get `InGuide=false` (no longer in guide)
+
+#### **Historical CSV Files (>1 month old)**
+- 📜 **New restaurants**: Get `InGuide=false` (historical-only, no longer current)
+- 🔒 **Existing restaurants**: `InGuide` status **NEVER changed**, only add historical awards
+
+### 🎯 Key Features
+
+- **SQLite Database**: Source of truth for current guide status
+- **Chronological Processing**: Files processed oldest first
+- **Duplicate Prevention**: Same restaurant + year awards automatically skipped
+- **URL Matching**: Restaurants matched by website URL (primary) or Michelin URL (fallback)
+- **Comprehensive Reporting**: Detailed markdown reports generated after processing
+
+### 📊 Output
+
+The command generates:
+- **Console logs**: Real-time processing status
+- **Markdown report**: Detailed statistics in `data/dataset_processing_report_YYYY-MM-DD_HH-MM-SS.md`
+- **Database updates**: New restaurants and awards added to `data/michelin.db`
+
+### 🚨 Quick Commands Reference
+
+```bash
+# Full processing (most common use case)
+./mym dataset -log debug
+
+# Test with small subset
+./mym dataset -limit 5 -log debug
+
+# Silent processing
+./mym dataset
+
+# Process only new files (place them in data/HistoricalData/ first)
+./mym dataset -log info
+```
+
+**💡 Pro Tip**: Always check the generated markdown report for processing statistics and any errors!
 
 ## Inspiration
 

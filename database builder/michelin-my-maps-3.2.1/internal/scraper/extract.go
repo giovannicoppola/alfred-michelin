@@ -43,6 +43,7 @@ func (s *Scraper) extractRestaurantData(e *colly.XMLElement) storage.RestaurantD
 		}
 	}
 
+	inGuideTrue := true
 	return storage.RestaurantData{
 		URL:                   url,
 		Year:                  year,
@@ -59,5 +60,7 @@ func (s *Scraper) extractRestaurantData(e *colly.XMLElement) storage.RestaurantD
 		Price:                 price,
 		FacilitiesAndServices: strings.Join(facilitiesAndServices, ","),
 		GreenStar:             parser.ParseGreenStar(greenStar),
+		WaybackURL:            "",
+		InGuide:               &inGuideTrue, // Current scraped restaurants are in guide
 	}
 }

@@ -11,6 +11,7 @@ type RestaurantRepository interface {
 	SaveRestaurant(ctx context.Context, restaurant *models.Restaurant) error
 	SaveAward(ctx context.Context, award *models.RestaurantAward) error
 	FindRestaurantByURL(ctx context.Context, url string) (*models.Restaurant, error)
+	FindRestaurantByWebsiteURL(ctx context.Context, websiteURL string) (*models.Restaurant, error)
 	UpsertRestaurantWithAward(ctx context.Context, restaurantData RestaurantData) error
 	ListAllRestaurantsWithURL() ([]models.Restaurant, error)
 }
@@ -33,4 +34,5 @@ type RestaurantData struct {
 	FacilitiesAndServices string
 	GreenStar             bool
 	WaybackURL            string
+	InGuide               *bool // Use pointer to bool to distinguish nil vs false vs true
 }

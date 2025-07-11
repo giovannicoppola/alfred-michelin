@@ -2,10 +2,14 @@ package parser
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"os"
+	"path/filepath"
 
 	"github.com/ngshiheng/michelin-my-maps/v3/internal/models"
 	"github.com/nyaruka/phonenumbers"
@@ -149,11 +153,7 @@ func ParseYear(publishedDate string) int {
 	if publishedDate == "" {
 		return 0
 	}
-	layouts := []string{
-		"2006-01-02T15:04",
-		"2006-01-02T15:04:05",
-		"2006-01-02",
-	}
+	layouts := []string{"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05"}
 	for _, layout := range layouts {
 		if t, err := time.Parse(layout, publishedDate); err == nil {
 			return t.Year()
@@ -165,6 +165,56 @@ func ParseYear(publishedDate string) int {
 		}
 	}
 	return 0
+}
+
+// ParseYearFromFilename extracts the year from a filename like "2022-03-13_michelin_my_maps 2.csv"
+func ParseYearFromFilename(filename string) int {
+	// Extract date pattern from filename (YYYY-MM-DD)
+	re := regexp.MustCompile(`(\d{4})-(\d{2})-(\d{2})`)
+	matches := re.FindStringSubmatch(filename)
+	if len(matches) > 1 {
+		if year, err := strconv.Atoi(matches[1]); err == nil {
+			return year
+		}
+	}
+	return 0
+}
+
+// ParseDateFromFilename extracts the full date from a filename like "2022-03-13_michelin_my_maps 2.csv"
+// Returns a time.Time for proper chronological sorting when multiple files exist per year
+func ParseDateFromFilename(filename string) (time.Time, error) {
+	// Extract date pattern from filename (YYYY-MM-DD)
+	re := regexp.MustCompile(`(\d{4})-(\d{2})-(\d{2})`)
+	matches := re.FindStringSubmatch(filename)
+	if len(matches) >= 4 {
+		dateStr := fmt.Sprintf("%s-%s-%s", matches[1], matches[2], matches[3])
+		date, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("failed to parse date from filename %s: %w", filename, err)
+		}
+		return date, nil
+	}
+	return time.Time{}, fmt.Errorf("no date pattern found in filename: %s", filename)
+}
+
+// ParseDateFromFilenameWithFallback extracts date from filename, falling back to file creation date if not found
+// This is useful for processing any CSV dataset version (historical, current, or future)
+func ParseDateFromFilenameWithFallback(filePath string) (time.Time, error) {
+	filename := filepath.Base(filePath)
+
+	// First try to extract date from filename
+	if date, err := ParseDateFromFilename(filename); err == nil {
+		return date, nil
+	}
+
+	// Fallback to file creation/modification date
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get file info for %s: %w", filePath, err)
+	}
+
+	// Use modification time as the fallback date
+	return fileInfo.ModTime(), nil
 }
 
 /*

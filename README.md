@@ -49,6 +49,10 @@ If you want to modify or extend this workflow:
 3. Build the application with: `cd src && go build -o ../workflow/michelin`
 4. Test the workflow in Alfred
 
+## future features
+- update directly via kagglehub
+
+
 ## License
 
 MIT
