@@ -69,14 +69,14 @@ func timeQuery(operation string, fn func() error) error {
 func main() {
 	// Check command-line arguments
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: alfred-michelin [command] [arguments]")
+		fmt.Fprintf(os.Stderr, "[ERROR] Usage: alfred-michelin [command] [arguments]\n")
 		os.Exit(1)
 	}
 
 	// Get workflow directory (where the executable is)
 	workDir, err := getWorkingDirectory()
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		os.Exit(1)
 	}
 
@@ -84,7 +84,7 @@ func main() {
 	dbPath := filepath.Join(workDir, db.DbFileName)
 	database, err := db.Initialize(dbPath)
 	if err != nil {
-		fmt.Printf("Error initializing database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing database: %v\n", err)
 		os.Exit(1)
 	}
 	defer database.Close()
@@ -109,7 +109,7 @@ func main() {
 		database.Close()
 		database, err = db.Initialize(dbPath)
 		if err != nil {
-			fmt.Printf("Error reinitializing database after update: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] Error reinitializing database after update: %v\n", err)
 			os.Exit(1)
 		}
 	}
@@ -358,6 +358,11 @@ func handleSearch(database *sql.DB, query string) {
 			restaurantName = *r.Name
 		}
 
+		// Add scroll emoji if restaurant is no longer in the guide
+		if r.InGuide == 0 {
+			restaurantName = restaurantName + " 📜"
+		}
+
 		// Add heart emoji to title for favorites
 		favoriteEmoji := "❤️ add to favorites"
 		if r.IsFavorite {
@@ -373,7 +378,7 @@ func handleSearch(database *sql.DB, query string) {
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
+		award := formatAwardWithYearRange(r.CurrentAward, r.CurrentAwardYear, r.CurrentAwardLastYear, r.CurrentGreenStar, r.InGuide)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -389,7 +394,8 @@ func handleSearch(database *sql.DB, query string) {
 				location,
 				award,
 				cuisine),
-			Arg:   fmt.Sprintf("%d", r.ID),
+			Arg: restaurantName,
+
 			Valid: true,
 			Variables: map[string]interface{}{
 				"restaurant_id":   r.ID,
@@ -474,6 +480,11 @@ func handleSearchFavorites(database *sql.DB, query string) {
 			restaurantName = *r.Name
 		}
 
+		// Add scroll emoji if restaurant is no longer in the guide
+		if r.InGuide == 0 {
+			restaurantName = restaurantName + " 📜"
+		}
+
 		// Add heart emoji to title for favorites (always for favorites search)
 		restaurantName = restaurantName + " ❤️"
 
@@ -483,7 +494,7 @@ func handleSearchFavorites(database *sql.DB, query string) {
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
+		award := formatAwardWithYearRange(r.CurrentAward, r.CurrentAwardYear, r.CurrentAwardLastYear, r.CurrentGreenStar, r.InGuide)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -574,6 +585,11 @@ func handleSearchVisited(database *sql.DB, query string) {
 			restaurantName = *r.Name
 		}
 
+		// Add scroll emoji if restaurant is no longer in the guide
+		if r.InGuide == 0 {
+			restaurantName = restaurantName + " 📜"
+		}
+
 		// Add heart emoji to title for favorites
 		if r.IsFavorite {
 			restaurantName = restaurantName + " ❤️"
@@ -583,7 +599,7 @@ func handleSearchVisited(database *sql.DB, query string) {
 		restaurantName = restaurantName + " ✅"
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
+		award := formatAwardWithYearRange(r.CurrentAward, r.CurrentAwardYear, r.CurrentAwardLastYear, r.CurrentGreenStar, r.InGuide)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -670,7 +686,7 @@ func handleGetRestaurant(database *sql.DB, id int64) {
 	}
 
 	// Format award display with stars and year
-	award := formatAwardWithStarsAndGreenStar(restaurant.CurrentAward, restaurant.CurrentAwardYear, restaurant.CurrentGreenStar)
+	award := formatAwardWithYearRange(restaurant.CurrentAward, restaurant.CurrentAwardYear, restaurant.CurrentAwardLastYear, restaurant.CurrentGreenStar, restaurant.InGuide)
 
 	// Create items for different actions
 	items := []AlfredItem{
@@ -878,6 +894,11 @@ func handleFavorites(database *sql.DB) {
 			restaurantName = *r.Name
 		}
 
+		// Add scroll emoji if restaurant is no longer in the guide
+		if r.InGuide == 0 {
+			restaurantName = restaurantName + " 📜"
+		}
+
 		// Add heart emoji to title (always for favorites list)
 		restaurantName = restaurantName + " ❤️"
 
@@ -887,7 +908,7 @@ func handleFavorites(database *sql.DB) {
 		}
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
+		award := formatAwardWithYearRange(r.CurrentAward, r.CurrentAwardYear, r.CurrentAwardLastYear, r.CurrentGreenStar, r.InGuide)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -976,6 +997,11 @@ func handleVisited(database *sql.DB) {
 			restaurantName = *r.Name
 		}
 
+		// Add scroll emoji if restaurant is no longer in the guide
+		if r.InGuide == 0 {
+			restaurantName = restaurantName + " 📜"
+		}
+
 		// Add heart emoji to title for favorites
 		if r.IsFavorite {
 			restaurantName = restaurantName + " ❤️"
@@ -985,7 +1011,7 @@ func handleVisited(database *sql.DB) {
 		restaurantName = restaurantName + " ✅"
 
 		// Format award display with stars and year
-		award := formatAwardWithStarsAndGreenStar(r.CurrentAward, r.CurrentAwardYear, r.CurrentGreenStar)
+		award := formatAwardWithYearRange(r.CurrentAward, r.CurrentAwardYear, r.CurrentAwardLastYear, r.CurrentGreenStar, r.InGuide)
 
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
@@ -1038,6 +1064,9 @@ func handleVisited(database *sql.DB) {
 
 // showError displays an error message in Alfred format
 func showError(message string) {
+	// Log error to stderr for Alfred debugger
+	fmt.Fprintf(os.Stderr, "[ERROR] %s\n", message)
+
 	items := []AlfredItem{
 		{
 			Title:    fmt.Sprintf("Error: %s", message),
@@ -1162,8 +1191,11 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 		// Get mode from environment variable to preserve it
 		mode := os.Getenv("mode")
 
+		// Format award with stars and green star emoji
+		formattedAward := formatAwardWithStarsAndGreenStar(&award.Distinction, &award.Year, award.GreenStar)
+
 		item := AlfredItem{
-			Title:    fmt.Sprintf("%d: %s", award.Year, award.Distinction),
+			Title:    fmt.Sprintf("%d: %s", award.Year, formattedAward),
 			Subtitle: fmt.Sprintf("%s | Year %d | CMD+ALT to go back", counter, award.Year),
 			Arg:      "",
 			Valid:    true,
@@ -1173,6 +1205,14 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 				"mode":          mode,
 			},
 		}
+
+		// Add icon for bib gourmand
+		if strings.Contains(strings.ToLower(award.Distinction), "bib gourmand") {
+			item.Icon = map[string]string{
+				"path": "../source/icons/bibg.png",
+			}
+		}
+
 		items = append(items, item)
 	}
 
@@ -1199,39 +1239,6 @@ func formatNumber(n int) string {
 		result += string(digit)
 	}
 	return result
-}
-
-// formatAwardWithStarsAndYear formats award display with stars replacing text and year in parentheses
-func formatAwardWithStarsAndYear(award *string, year *int) string {
-	if award == nil || *award == "" {
-		return "No Michelin distinction"
-	}
-
-	awardStr := strings.ToLower(*award)
-	formattedAward := ""
-
-	if strings.Contains(awardStr, "3 star") {
-		formattedAward = "⭐️⭐️⭐️"
-	} else if strings.Contains(awardStr, "2 star") {
-		formattedAward = "⭐️⭐️"
-	} else if strings.Contains(awardStr, "1 star") {
-		formattedAward = "⭐️"
-	} else if strings.Contains(awardStr, "bib gourmand") {
-		formattedAward = "Bib Gourmand"
-	} else if strings.Contains(awardStr, "green star") {
-		formattedAward = "🌿 Green Star"
-	} else if strings.Contains(awardStr, "selected restaurant") {
-		formattedAward = "Selected Restaurants"
-	} else {
-		formattedAward = *award
-	}
-
-	// Add year if available
-	if year != nil && *year > 0 {
-		formattedAward += fmt.Sprintf(" (%d)", *year)
-	}
-
-	return formattedAward
 }
 
 // formatAwardWithStarsAndGreenStar formats award display with stars replacing text, year in parentheses, and green star emoji
@@ -1265,6 +1272,48 @@ func formatAwardWithStarsAndGreenStar(award *string, year *int, greenStar *bool)
 	// Add year if available
 	if year != nil && *year > 0 {
 		formattedAward += fmt.Sprintf(" (%d)", *year)
+	}
+
+	return formattedAward
+}
+
+// formatAwardWithYearRange formats award display with proper year information based on guide status
+func formatAwardWithYearRange(award *string, firstYear *int, lastYear *int, greenStar *bool, inGuide int) string {
+	if award == nil || *award == "" {
+		return "No Michelin distinction"
+	}
+
+	awardStr := strings.ToLower(*award)
+	formattedAward := ""
+
+	if strings.Contains(awardStr, "3 star") {
+		formattedAward = "⭐️⭐️⭐️"
+	} else if strings.Contains(awardStr, "2 star") {
+		formattedAward = "⭐️⭐️"
+	} else if strings.Contains(awardStr, "1 star") {
+		formattedAward = "⭐️"
+	} else if strings.Contains(awardStr, "bib gourmand") {
+		formattedAward = "Bib Gourmand"
+	} else if strings.Contains(awardStr, "selected restaurant") {
+		formattedAward = "Selected Restaurants"
+	} else {
+		formattedAward = *award
+	}
+
+	// Add green star emoji if present
+	if greenStar != nil && *greenStar {
+		formattedAward += " 🍀"
+	}
+
+	// Add year information based on guide status
+	if firstYear != nil && *firstYear > 0 {
+		if inGuide == 0 && lastYear != nil && *lastYear > 0 && *lastYear != *firstYear {
+			// Restaurant no longer in guide and has different last year - show range
+			formattedAward += fmt.Sprintf(" (%d-%d)", *firstYear, *lastYear)
+		} else {
+			// Restaurant still in guide or same first/last year - show single year
+			formattedAward += fmt.Sprintf(" (%d)", *firstYear)
+		}
 	}
 
 	return formattedAward

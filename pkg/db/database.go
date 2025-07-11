@@ -129,6 +129,12 @@ func MigrateNormalizedColumns(db *sql.DB) error {
 			CREATE INDEX IF NOT EXISTS idx_name_normalized ON restaurants(name_normalized);
 			CREATE INDEX IF NOT EXISTS idx_location_normalized ON restaurants(location_normalized);
 			CREATE INDEX IF NOT EXISTS idx_cuisine_normalized ON restaurants(cuisine_normalized);
+			
+			-- Critical indexes for restaurant_awards table performance
+			CREATE INDEX IF NOT EXISTS idx_restaurant_awards_restaurant_id ON restaurant_awards(restaurant_id);
+			CREATE INDEX IF NOT EXISTS idx_restaurant_awards_year ON restaurant_awards(year);
+			CREATE INDEX IF NOT EXISTS idx_restaurant_awards_distinction ON restaurant_awards(distinction);
+			CREATE INDEX IF NOT EXISTS idx_restaurant_awards_composite ON restaurant_awards(restaurant_id, distinction, year);
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes on normalized columns: %v", err)
@@ -156,11 +162,13 @@ type Restaurant struct {
 	IsVisited             bool
 	VisitedDate           *string
 	VisitedNotes          *string
+	InGuide               int
 	// Award info from latest award
-	CurrentAward     *string
-	CurrentPrice     *string
-	CurrentGreenStar *bool
-	CurrentAwardYear *int
+	CurrentAward         *string
+	CurrentPrice         *string
+	CurrentGreenStar     *bool
+	CurrentAwardYear     *int
+	CurrentAwardLastYear *int
 }
 
 // RestaurantAward represents a restaurant's award history
@@ -202,6 +210,12 @@ func Initialize(dbPath string) (*sql.DB, error) {
 		
 		CREATE INDEX IF NOT EXISTS idx_user_favorites_restaurant ON user_favorites(restaurant_id);
 		CREATE INDEX IF NOT EXISTS idx_user_visits_restaurant ON user_visits(restaurant_id);
+		
+		-- Ensure critical performance indexes exist on restaurant_awards
+		CREATE INDEX IF NOT EXISTS idx_restaurant_awards_restaurant_id ON restaurant_awards(restaurant_id);
+		CREATE INDEX IF NOT EXISTS idx_restaurant_awards_year ON restaurant_awards(year);
+		CREATE INDEX IF NOT EXISTS idx_restaurant_awards_distinction ON restaurant_awards(distinction);
+		CREATE INDEX IF NOT EXISTS idx_restaurant_awards_composite ON restaurant_awards(restaurant_id, distinction, year);
 	`)
 	if err != nil {
 		db.Close()
@@ -299,35 +313,31 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		LEFT JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		` + whereClause + `
 		ORDER BY 
@@ -356,9 +366,9 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
@@ -445,35 +455,31 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			1 as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		INNER JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		` + whereClause + `
 		ORDER BY 
@@ -501,9 +507,9 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
@@ -588,35 +594,31 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			1 as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		INNER JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		` + whereClause + `
 		ORDER BY 
@@ -645,9 +647,9 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
@@ -666,43 +668,39 @@ func GetRestaurantByID(db *sql.DB, id int64) (Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		LEFT JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		WHERE r.id = ?
 	`, id).Scan(
 		&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 		&r.Longitude, &r.Latitude, &r.PhoneNumber,
-		&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+		&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 		&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-		&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+		&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 	)
 
 	if err != nil {
@@ -781,35 +779,31 @@ func GetFavoriteRestaurants(db *sql.DB) ([]Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			1 as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		INNER JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		ORDER BY r.name
 	`)
@@ -825,9 +819,9 @@ func GetFavoriteRestaurants(db *sql.DB) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
@@ -844,35 +838,31 @@ func GetVisitedRestaurants(db *sql.DB) ([]Restaurant, error) {
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
 			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
-			r.description,
+			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			1 as is_visited,
 			uv.visited_date, uv.notes,
-			ra.distinction, ra.price, ra.green_star, ra.first_year
+			ra.distinction, ra.price, ra.green_star, ra.first_year, ra.last_year
 		FROM restaurants r
 		INNER JOIN user_visits uv ON r.id = uv.restaurant_id
 		LEFT JOIN user_favorites uf ON r.id = uf.restaurant_id
 		LEFT JOIN (
 			SELECT 
-				ra1.restaurant_id, 
-				ra1.distinction, 
-				ra1.price, 
-				ra1.green_star, 
-				ra1.year as first_year
+				ra1.restaurant_id,
+				ra1.distinction,
+				ra1.price,
+				ra1.green_star,
+				MIN(ra_range.year) as first_year,
+				MAX(ra_range.year) as last_year
 			FROM restaurant_awards ra1
-			WHERE ra1.distinction = (
-				SELECT ra2.distinction 
-				FROM restaurant_awards ra2 
-				WHERE ra2.restaurant_id = ra1.restaurant_id 
-				ORDER BY ra2.year DESC 
-				LIMIT 1
-			)
-			AND ra1.year = (
-				SELECT MIN(ra3.year)
-				FROM restaurant_awards ra3
-				WHERE ra3.restaurant_id = ra1.restaurant_id
-				AND ra3.distinction = ra1.distinction
-			)
+			JOIN (
+				SELECT restaurant_id, MAX(year) as max_year
+				FROM restaurant_awards
+				GROUP BY restaurant_id
+			) latest ON ra1.restaurant_id = latest.restaurant_id AND ra1.year = latest.max_year
+			JOIN restaurant_awards ra_range ON ra1.restaurant_id = ra_range.restaurant_id 
+				AND ra1.distinction = ra_range.distinction
+			GROUP BY ra1.restaurant_id, ra1.distinction, ra1.price, ra1.green_star
 		) ra ON r.id = ra.restaurant_id
 		ORDER BY uv.visited_date DESC, r.name
 	`)
@@ -888,9 +878,9 @@ func GetVisitedRestaurants(db *sql.DB) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description,
+			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
-			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear,
+			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %v", err)
