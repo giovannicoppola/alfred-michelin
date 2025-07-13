@@ -537,37 +537,6 @@ func handleSearch(database *sql.DB, query string) {
 			}
 		}
 
-		arg := restaurantName
-		switch openIn {
-		case "restaurant":
-			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
-				arg = *r.WebsiteUrl
-			} else if r.Url != nil && *r.Url != "" {
-				arg = *r.Url
-			}
-		case "michelin":
-			if r.Url != nil && *r.Url != "" {
-				arg = *r.Url
-			}
-		case "maps":
-			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
-				if r.Name != nil && *r.Name != "" {
-					encodedName := url.QueryEscape(*r.Name)
-					arg = fmt.Sprintf("https://www.google.com/maps?q=%s&ll=%s,%s&z=15", encodedName, *r.Latitude, *r.Longitude)
-				} else {
-					arg = fmt.Sprintf("https://www.google.com/maps?ll=%s,%s&z=15", *r.Latitude, *r.Longitude)
-				}
-			}
-		case "apple_maps":
-			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
-				if r.Name != nil && *r.Name != "" {
-					arg = fmt.Sprintf("maps://?address=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
-				} else {
-					arg = fmt.Sprintf("maps://?ll=%s,%s", *r.Latitude, *r.Longitude)
-				}
-			}
-		}
-
 		item := AlfredItem{
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
@@ -575,7 +544,7 @@ func handleSearch(database *sql.DB, query string) {
 				location,
 				award,
 				cuisine),
-			Arg: arg,
+			Arg: "",
 
 			Valid: true,
 			Variables: map[string]interface{}{
@@ -734,8 +703,6 @@ func handleSearchFavorites(database *sql.DB, query string) {
 			}
 		}
 
-		arg := fmt.Sprintf("%d", r.ID)
-
 		item := AlfredItem{
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
@@ -743,7 +710,7 @@ func handleSearchFavorites(database *sql.DB, query string) {
 				location,
 				award,
 				cuisine),
-			Arg:   arg,
+			Arg:   "",
 			Valid: true,
 			Variables: map[string]interface{}{
 				"restaurant_id":      r.ID,
@@ -898,17 +865,11 @@ func handleSearchVisited(database *sql.DB, query string) {
 		}
 
 		// Determine the argument (URL to open)
-		arg := fmt.Sprintf("%d", r.ID)
-		if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
-			arg = *r.WebsiteUrl
-		} else if r.Url != nil && *r.Url != "" {
-			arg = *r.Url
-		}
 
 		item := AlfredItem{
 			Title:    restaurantName,
 			Subtitle: subtitle,
-			Arg:      arg,
+			Arg:      "",
 			Valid:    true,
 			Variables: map[string]interface{}{
 				"restaurant_id":      r.ID,
@@ -1100,14 +1061,6 @@ func handleFavorites(database *sql.DB) {
 			}
 		}
 
-		// Determine the argument (URL to open)
-		arg := fmt.Sprintf("%d", r.ID)
-		if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
-			arg = *r.WebsiteUrl
-		} else if r.Url != nil && *r.Url != "" {
-			arg = *r.Url
-		}
-
 		item := AlfredItem{
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
@@ -1115,7 +1068,7 @@ func handleFavorites(database *sql.DB) {
 				location,
 				award,
 				cuisine),
-			Arg:   arg,
+			Arg:   "",
 			Valid: true,
 			Variables: map[string]interface{}{
 				"restaurant_id":      r.ID,
@@ -1265,7 +1218,7 @@ func handleVisited(database *sql.DB) {
 		item := AlfredItem{
 			Title:    restaurantName,
 			Subtitle: subtitle,
-			Arg:      fmt.Sprintf("%d", r.ID),
+			Arg:      "",
 			Valid:    true,
 			Variables: map[string]interface{}{
 				"restaurant_id":      r.ID,
