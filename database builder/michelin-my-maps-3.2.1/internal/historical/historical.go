@@ -51,6 +51,9 @@ type ProcessingStats struct {
 
 	// Awards breakdown
 	AwardStats map[string]int
+
+	// Track unique restaurants to avoid double counting
+	UniqueRestaurants map[string]bool
 }
 
 // FileStats tracks statistics for a single file
@@ -117,8 +120,34 @@ func (p *Processor) getCurrentGuideRestaurant(ctx context.Context, websiteURL, m
 		return nil, false, nil // Restaurant not found in current database
 	}
 
+	// If restaurant exists in database, it's considered "in guide" unless explicitly marked as false
+	// This handles the case where in_guide might be NULL or false but should be true
+	isInGuide := restaurant.InGuide
+	if !isInGuide {
+		// Check if in_guide is actually NULL by querying the database directly
+		var inGuideValue *bool
+		err := p.repository.(*storage.SQLiteRepository).GetDB().WithContext(ctx).
+			Model(&models.Restaurant{}).
+			Where("id = ?", restaurant.ID).
+			Select("in_guide").
+			Scan(&inGuideValue).Error
+
+		if err == nil && inGuideValue == nil {
+			// in_guide is NULL, treat as "in guide" and fix it
+			err = p.repository.(*storage.SQLiteRepository).GetDB().WithContext(ctx).
+				Model(&models.Restaurant{}).
+				Where("id = ?", restaurant.ID).
+				Update("in_guide", true).Error
+
+			if err == nil {
+				isInGuide = true
+				restaurant.InGuide = true // Update the local copy too
+			}
+		}
+	}
+
 	// Return the restaurant and whether it's currently in the guide
-	return restaurant, restaurant.InGuide, nil
+	return restaurant, isInGuide, nil
 }
 
 // New creates a new dataset processor
@@ -131,8 +160,9 @@ func New() (*Processor, error) {
 	}
 
 	stats := &ProcessingStats{
-		FileStats:  make(map[string]*FileStats),
-		AwardStats: make(map[string]int),
+		FileStats:         make(map[string]*FileStats),
+		AwardStats:        make(map[string]int),
+		UniqueRestaurants: make(map[string]bool),
 	}
 
 	return &Processor{
@@ -171,7 +201,7 @@ type HistoricalRestaurant struct {
 //
 // limit: maximum number of restaurants to process per file (0 = no limit, for testing)
 func (p *Processor) ProcessHistoricalData(ctx context.Context, limit int) error {
-	// Initialize statistics
+	// Initialize statistics with local time
 	p.stats.StartTime = time.Now()
 
 	csvFiles, err := p.findDatasetCSVFiles()
@@ -207,7 +237,7 @@ func (p *Processor) ProcessHistoricalData(ctx context.Context, limit int) error 
 		p.stats.FilesProcessed++
 	}
 
-	// Finalize statistics
+	// Finalize statistics with local time
 	p.stats.EndTime = time.Now()
 
 	// Generate and save markdown report
@@ -298,7 +328,17 @@ func (p *Processor) processDatasetCSVFile(ctx context.Context, csvFile string, l
 	}
 
 	fileStats.RestaurantsFound = len(restaurants)
-	p.stats.TotalRestaurantsFound += len(restaurants)
+	// Only count unique restaurants in total, not the same restaurant across multiple files
+	for _, restaurant := range restaurants {
+		key := restaurant.URL // Use URL as unique identifier
+		if key == "" {
+			key = restaurant.Name + "|" + restaurant.Address // Fallback for restaurants without URL
+		}
+		if !p.stats.UniqueRestaurants[key] {
+			p.stats.UniqueRestaurants[key] = true
+			p.stats.TotalRestaurantsFound++
+		}
+	}
 
 	log.WithFields(log.Fields{
 		"file":     csvFile,
@@ -449,7 +489,15 @@ func (p *Processor) processHistoricalRestaurant(ctx context.Context, restaurant 
 	if currentRestaurant != nil {
 		// Restaurant exists in current database
 		fileStats.ExistingRestaurants++
-		p.stats.ExistingRestaurants++
+		// Only count unique existing restaurants in global stats
+		key := restaurant.URL
+		if key == "" {
+			key = restaurant.Name + "|" + restaurant.Address
+		}
+		if !p.stats.UniqueRestaurants[key+"|existing"] {
+			p.stats.UniqueRestaurants[key+"|existing"] = true
+			p.stats.ExistingRestaurants++
+		}
 		return p.addHistoricalAward(ctx, currentRestaurant, restaurant, year, fileStats, isRecent, isCurrentlyInGuide)
 	} else {
 		// Restaurant doesn't exist in current database
@@ -479,6 +527,38 @@ func (p *Processor) addHistoricalAward(ctx context.Context, existingRestaurant *
 		return fmt.Errorf("failed to check existing award: %w", err)
 	}
 
+	// Fix NULL in_guide fields for existing restaurants
+	// If in_guide is NULL and this is a restaurant that should be in guide, set it to true
+	if existingRestaurant.InGuide == false && isCurrentlyInGuide {
+		// Check if in_guide is actually NULL by querying the database directly
+		var inGuideValue *bool
+		err := p.repository.(*storage.SQLiteRepository).GetDB().WithContext(ctx).
+			Model(&models.Restaurant{}).
+			Where("id = ?", existingRestaurant.ID).
+			Select("in_guide").
+			Scan(&inGuideValue).Error
+
+		if err == nil && inGuideValue == nil {
+			// in_guide is NULL, set it to true for restaurants that should be in guide
+			err = p.repository.(*storage.SQLiteRepository).GetDB().WithContext(ctx).
+				Model(&models.Restaurant{}).
+				Where("id = ?", existingRestaurant.ID).
+				Update("in_guide", true).Error
+
+			if err != nil {
+				log.WithFields(log.Fields{
+					"restaurant_id": existingRestaurant.ID,
+					"error":         err,
+				}).Warn("failed to update NULL in_guide to true")
+			} else {
+				log.WithFields(log.Fields{
+					"restaurant_id": existingRestaurant.ID,
+					"restaurant":    existingRestaurant.Name,
+				}).Info("fixed NULL in_guide field - set to true")
+			}
+		}
+	}
+
 	// Create the award ONLY - do NOT touch the restaurant record at all
 	distinction := p.parseClassification(restaurant.Classification)
 	award := &models.RestaurantAward{
@@ -506,7 +586,7 @@ func (p *Processor) addHistoricalAward(ctx context.Context, existingRestaurant *
 		"currentlyInGuide": isCurrentlyInGuide,
 		"csvIsRecent":      isRecent,
 		"preservedInGuide": existingRestaurant.InGuide,
-		"action":           "added award only - restaurant InGuide status untouched",
+		"action":           "added award only - restaurant InGuide status preserved",
 	}).Info("added award to existing restaurant without modifying InGuide status")
 
 	return nil
@@ -648,12 +728,33 @@ func (p *Processor) parsePrice(price string) string {
 
 // generateMarkdownReport creates a detailed markdown report of the dataset processing
 func (p *Processor) generateMarkdownReport() error {
-	// Create report filename with timestamp
+	// Create report filename with local timestamp
 	reportFileName := fmt.Sprintf("data/dataset_processing_report_%s.md",
 		p.stats.StartTime.Format("2006-01-02_15-04-05"))
 
 	// Calculate processing duration
 	duration := p.stats.EndTime.Sub(p.stats.StartTime)
+
+	// Format duration nicely
+	var durationStr string
+	if duration.Hours() >= 1 {
+		hours := int(duration.Hours())
+		minutes := int(duration.Minutes()) % 60
+		seconds := int(duration.Seconds()) % 60
+		durationStr = fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	} else if duration.Minutes() >= 1 {
+		minutes := int(duration.Minutes())
+		seconds := int(duration.Seconds()) % 60
+		durationStr = fmt.Sprintf("%dm %ds", minutes, seconds)
+	} else {
+		seconds := int(duration.Seconds())
+		milliseconds := int(duration.Milliseconds()) % 1000
+		if milliseconds > 0 {
+			durationStr = fmt.Sprintf("%d.%03ds", seconds, milliseconds)
+		} else {
+			durationStr = fmt.Sprintf("%ds", seconds)
+		}
+	}
 
 	// Build markdown content
 	var report strings.Builder
@@ -661,8 +762,10 @@ func (p *Processor) generateMarkdownReport() error {
 	// Header
 	report.WriteString("# Dataset Processing Report\n\n")
 	report.WriteString("*Processing CSV dataset files (historical, current, or future versions)*\n\n")
-	report.WriteString(fmt.Sprintf("**Generated:** %s\n", p.stats.EndTime.Format("2006-01-02 15:04:05")))
-	report.WriteString(fmt.Sprintf("**Processing Duration:** %s\n\n", duration.String()))
+
+	// Get user's local timezone - use the actual local time
+	report.WriteString(fmt.Sprintf("**Generated:** %s\n", p.stats.EndTime.Format("2006-01-02 15:04:05 MST -0700")))
+	report.WriteString(fmt.Sprintf("**Processing Duration:** %s\n\n", durationStr))
 
 	// Overview
 	report.WriteString("## 📊 Processing Overview\n\n")

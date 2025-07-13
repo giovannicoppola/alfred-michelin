@@ -24,7 +24,8 @@ go run compare_csv_database.go
 ### File Paths
 
 The script uses these hardcoded paths:
-- Database: `/Users/giovanni/Library/Application Support/Alfred/Workflow Data/com.giovanni.alfred-michelin/michelin new.db`
+
+- Database: `/Users/giovanni/Library/Application Support/Alfred/Workflow Data/com.giovanni.alfred-michelin/michelin.db`
 - CSV: `/Users/giovanni/gDrive/GitHub repos/alfred-michelin/database builder/michelin-my-maps-3.2.1/data/michelin_my_maps.csv`
 - Output files (timestamped to preserve history):
   - `missing_from_database_YYYY-MM-DD_HH-MM-SS.csv` (restaurants in CSV but not in DB)
@@ -51,6 +52,8 @@ The script uses these hardcoded paths:
 ### Dependencies
 
 Requires the SQLite3 driver for Go:
+
 ```bash
 go mod tidy
-``` 
+```
+

@@ -226,7 +226,7 @@ func main() {
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
 
 	// Paths
-	dbPath := "/Users/giovanni/Library/Application Support/Alfred/Workflow Data/com.giovanni.alfred-michelin/michelin new.db"
+	dbPath := "/Users/giovanni/Library/Application Support/Alfred/Workflow Data/com.giovanni.alfred-michelin/michelin.db"
 	csvPath := "/Users/giovanni/gDrive/GitHub repos/alfred-michelin/database builder/michelin-my-maps-3.2.1/data/michelin_my_maps.csv"
 	missingFromDbPath := fmt.Sprintf("missing_from_database_%s.csv", timestamp)
 	missingFromCsvPath := fmt.Sprintf("missing_from_csv_%s.csv", timestamp)

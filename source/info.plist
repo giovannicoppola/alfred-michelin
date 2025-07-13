@@ -4,6 +4,8 @@
 <dict>
 	<key>bundleid</key>
 	<string>com.giovanni.alfred-michelin</string>
+	<key>category</key>
+	<string>Productivity</string>
 	<key>connections</key>
 	<dict>
 		<key>0F8E283B-B3A5-4A38-BD5A-64CDEBA6DBE2</key>
@@ -40,11 +42,21 @@
 			</dict>
 			<dict>
 				<key>destinationuid</key>
+				<string>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</string>
+				<key>modifiers</key>
+				<integer>131072</integer>
+				<key>modifiersubtext</key>
+				<string>ℹ️ details</string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
 				<string>85143491-24AE-41B8-B7B7-C095D1DB0A68</string>
 				<key>modifiers</key>
 				<integer>1048576</integer>
 				<key>modifiersubtext</key>
-				<string>Show Award history 🏅🏆️</string>
+				<string>🏆️ award history</string>
 				<key>vitoclose</key>
 				<false/>
 			</dict>
@@ -85,11 +97,11 @@
 				<false/>
 			</dict>
 		</array>
-		<key>7FE62936-C125-48A2-9857-879B401B9074</key>
+		<key>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>0EDD7788-C956-48A6-9583-D6A07CB80639</string>
+				<string>A77C5978-3BA8-4159-ABDA-233532AB4E30</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -151,7 +163,17 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>836EA27F-6C20-4602-9597-D163AA7C8EEC</string>
+				<string>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</string>
+				<key>modifiers</key>
+				<integer>131072</integer>
+				<key>modifiersubtext</key>
+				<string>ℹ️ details</string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>A1F1E491-C70B-460A-B27C-61BC8479580C</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -194,7 +216,17 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</string>
+				<string>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</string>
+				<key>modifiers</key>
+				<integer>131072</integer>
+				<key>modifiersubtext</key>
+				<string>ℹ️ details</string>
+				<key>vitoclose</key>
+				<true/>
+			</dict>
+			<dict>
+				<key>destinationuid</key>
+				<string>05B542ED-454F-451D-B50B-29B004FC946B</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -250,7 +282,7 @@
 	<key>createdby</key>
 	<string>giovanni</string>
 	<key>description</key>
-	<string>Search, favorite, and track your Michelin guide restaurant visits</string>
+	<string>Search, favorite, and track your Michelin guide restaurants</string>
 	<key>disabled</key>
 	<false/>
 	<key>name</key>
@@ -265,7 +297,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>script</key>
-				<string>open "$OPEN_IN"</string>
+				<string>open "$OPEN_IN_URL"</string>
 				<key>scriptargtype</key>
 				<integer>1</integer>
 				<key>scriptfile</key>
@@ -322,7 +354,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
-				<string>mmich</string>
+				<string>{var:MICHELIN_KEY}</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
@@ -332,7 +364,7 @@
 				<key>queuemode</key>
 				<integer>1</integer>
 				<key>runningsubtext</key>
-				<string>Searching...</string>
+				<string>⏳️ one moment please...</string>
 				<key>script</key>
 				<string>./michelin search "$1"</string>
 				<key>scriptargtype</key>
@@ -340,9 +372,9 @@
 				<key>scriptfile</key>
 				<string></string>
 				<key>subtext</key>
-				<string>Search for restaurants by name, location, or distinction</string>
+				<string>Starred Dining. Instantly 🎩</string>
 				<key>title</key>
-				<string>Search Michelin Restaurants</string>
+				<string>Michelin Guide</string>
 				<key>type</key>
 				<integer>0</integer>
 				<key>withspace</key>
@@ -473,6 +505,39 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>behaviour</key>
+				<integer>2</integer>
+				<key>fontmode</key>
+				<integer>0</integer>
+				<key>fontsizing</key>
+				<integer>0</integer>
+				<key>footertext</key>
+				<string></string>
+				<key>inputfile</key>
+				<string>showDescription.sh</string>
+				<key>inputtype</key>
+				<integer>1</integer>
+				<key>loadingtext</key>
+				<string></string>
+				<key>outputmode</key>
+				<integer>0</integer>
+				<key>scriptinput</key>
+				<integer>0</integer>
+				<key>spellchecking</key>
+				<integer>0</integer>
+				<key>stackview</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.userinterface.text</string>
+			<key>uid</key>
+			<string>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>externaltriggerid</key>
 				<string>main_search</string>
 				<key>passinputasargument</key>
@@ -565,21 +630,38 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string>{var:OPEN_IN}</string>
+				<key>externaltriggerid</key>
+				<string>openURL</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
+			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
-			<string>836EA27F-6C20-4602-9597-D163AA7C8EEC</string>
+			<string>A1F1E491-C70B-460A-B27C-61BC8479580C</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>externaltriggerid</key>
+				<string>openURL</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>05B542ED-454F-451D-B50B-29B004FC946B</string>
 			<key>version</key>
 			<integer>1</integer>
 		</dict>
@@ -624,23 +706,101 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string>{query}</string>
+				<key>externaltriggerid</key>
+				<string>visited</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
 			</dict>
 			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
+			<string>alfred.workflow.output.callexternaltrigger</string>
 			<key>uid</key>
-			<string>0EDD7788-C956-48A6-9583-D6A07CB80639</string>
+			<string>D6E17A5A-14E9-4B08-9329-4AB936FD14D3</string>
 			<key>version</key>
 			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>0</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>hotstring</key>
+				<string></string>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<false/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>0</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<true/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string>{var:FAVORITE_KEY}</string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string>Loading favorite restaurants...</string>
+				<key>script</key>
+				<string>./michelin favorites "$1"</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>subtext</key>
+				<string>View your favorite Michelin restaurants</string>
+				<key>title</key>
+				<string>Michelin Favorite Restaurants</string>
+				<key>type</key>
+				<integer>0</integer>
+				<key>withspace</key>
+				<true/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>F4130124-75E6-46B0-93CF-0CF8AA4C28DB</string>
+			<key>version</key>
+			<integer>3</integer>
 		</dict>
 		<dict>
 			<key>config</key>
@@ -664,6 +824,25 @@
 		<dict>
 			<key>config</key>
 			<dict>
+				<key>externaltriggerid</key>
+				<string>favorite</string>
+				<key>passinputasargument</key>
+				<true/>
+				<key>passvariables</key>
+				<true/>
+				<key>workflowbundleid</key>
+				<string>self</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.output.callexternaltrigger</string>
+			<key>uid</key>
+			<string>AC82E1ED-1160-48DA-A63A-11F85AC88D5A</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
 				<key>alfredfiltersresults</key>
 				<false/>
 				<key>alfredfiltersresultsmatchmode</key>
@@ -677,7 +856,7 @@
 				<key>escaping</key>
 				<integer>102</integer>
 				<key>keyword</key>
-				<string>mv</string>
+				<string>{var:VISITED_KEY}</string>
 				<key>queuedelaycustom</key>
 				<integer>3</integer>
 				<key>queuedelayimmediatelyinitially</key>
@@ -744,194 +923,6 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>1</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>mrd</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>Loading restaurant details...</string>
-				<key>script</key>
-				<string>./michelin get "$1"</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string>View restaurant details and available actions</string>
-				<key>title</key>
-				<string>Michelin Restaurant Details</string>
-				<key>type</key>
-				<integer>0</integer>
-				<key>withspace</key>
-				<true/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>7FE62936-C125-48A2-9857-879B401B9074</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>browser</key>
-				<string></string>
-				<key>skipqueryencode</key>
-				<false/>
-				<key>skipvarencode</key>
-				<false/>
-				<key>spaces</key>
-				<string></string>
-				<key>url</key>
-				<string>{var:OPEN_IN}</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.action.openurl</string>
-			<key>uid</key>
-			<string>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>externaltriggerid</key>
-				<string>visited</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>D6E17A5A-14E9-4B08-9329-4AB936FD14D3</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>action</key>
-				<integer>0</integer>
-				<key>argument</key>
-				<integer>0</integer>
-				<key>focusedappvariable</key>
-				<false/>
-				<key>focusedappvariablename</key>
-				<string></string>
-				<key>hotkey</key>
-				<integer>0</integer>
-				<key>hotmod</key>
-				<integer>0</integer>
-				<key>hotstring</key>
-				<string></string>
-				<key>leftcursor</key>
-				<false/>
-				<key>modsmode</key>
-				<integer>0</integer>
-				<key>relatedAppsMode</key>
-				<integer>0</integer>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.trigger.hotkey</string>
-			<key>uid</key>
-			<string>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</string>
-			<key>version</key>
-			<integer>2</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>alfredfiltersresults</key>
-				<false/>
-				<key>alfredfiltersresultsmatchmode</key>
-				<integer>0</integer>
-				<key>argumenttreatemptyqueryasnil</key>
-				<true/>
-				<key>argumenttrimmode</key>
-				<integer>0</integer>
-				<key>argumenttype</key>
-				<integer>2</integer>
-				<key>escaping</key>
-				<integer>102</integer>
-				<key>keyword</key>
-				<string>mmf</string>
-				<key>queuedelaycustom</key>
-				<integer>3</integer>
-				<key>queuedelayimmediatelyinitially</key>
-				<true/>
-				<key>queuedelaymode</key>
-				<integer>0</integer>
-				<key>queuemode</key>
-				<integer>1</integer>
-				<key>runningsubtext</key>
-				<string>Loading favorite restaurants...</string>
-				<key>script</key>
-				<string>./michelin favorites</string>
-				<key>scriptargtype</key>
-				<integer>1</integer>
-				<key>scriptfile</key>
-				<string></string>
-				<key>subtext</key>
-				<string>View your favorite Michelin restaurants</string>
-				<key>title</key>
-				<string>Michelin Favorite Restaurants</string>
-				<key>type</key>
-				<integer>0</integer>
-				<key>withspace</key>
-				<false/>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.input.scriptfilter</string>
-			<key>uid</key>
-			<string>F4130124-75E6-46B0-93CF-0CF8AA4C28DB</string>
-			<key>version</key>
-			<integer>3</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
-				<key>externaltriggerid</key>
-				<string>favorite</string>
-				<key>passinputasargument</key>
-				<true/>
-				<key>passvariables</key>
-				<true/>
-				<key>workflowbundleid</key>
-				<string>self</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.output.callexternaltrigger</string>
-			<key>uid</key>
-			<string>AC82E1ED-1160-48DA-A63A-11F85AC88D5A</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>externaltriggerid</key>
 				<string>listAwards</string>
 				<key>passinputasargument</key>
@@ -950,38 +941,37 @@
 		</dict>
 	</array>
 	<key>readme</key>
-	<string># Michelin Guide for Alfred
+	<string># Michelin Guide ✨️
+A Workflow to search, favorite, and track your visits to 20,000+ Michelin guide restaurants around the world.
 
-Search, favorite, and track your Michelin guide restaurant visits with Alfred.
+Feeling fancy? 🎩 Find your next Michelin-starred restaurant with Alfred. ✨
 
-## Commands
+![](screenshot.png)
 
-- `mmich [query]` - Search for restaurants by name, location, or distinction
-- `mf` - View your favorite restaurants
-- `mv` - View your visited restaurants
-- `mrd [id]` - View restaurant details
+## Usage
 
-## Features
+- `!mm [query]` - Search for Michelin restaurants by name, location, cuisine, or distinction
+- `!mf` - View all your favorite restaurants
+- `!mf [query]` - Search within your favorite restaurants
+- `!mv` - View all restaurants you've visited
+- `!mv [query]` - Search within your visited restaurants
 
-- Search through 17,000+ Michelin guide restaurants
-- View restaurant details and visit the restaurant's website
-- Save restaurants to your favorites list
-- Track restaurants you've visited
-- Add notes to your restaurant visits
-- **NEW:** Press SHIFT+Enter when selecting a restaurant to view its award history
-- **NEW:** Press CMD+ALT+Enter in award history to go back to search results
+Once a restaurant is identified: 
 
-## Requirements
-- Alfred Powerpack
-- Go 1.15 or later (for development)</string>
+- `CTRL`: **❤️Favorite**: Toggle restaurant favorite status
+- `ALT`: **✅️Visited**: Toggle restaurant visited status
+- `CMD`: **🏆️Awards**: View award history for restaurant (CMD+ALT: back)
+- `SHIFT`: **ℹ️More details**</string>
 	<key>uidata</key>
 	<dict>
-		<key>0EDD7788-C956-48A6-9583-D6A07CB80639</key>
+		<key>05B542ED-454F-451D-B50B-29B004FC946B</key>
 		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
 			<key>xpos</key>
-			<real>1710</real>
+			<real>1395</real>
 			<key>ypos</key>
-			<real>595</real>
+			<real>460</real>
 		</dict>
 		<key>0F8E283B-B3A5-4A38-BD5A-64CDEBA6DBE2</key>
 		<dict>
@@ -1007,18 +997,9 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 		<key>51B7FD0A-6DE9-4B4F-AE1D-2BF01CC8D3DC</key>
 		<dict>
 			<key>xpos</key>
-			<real>70</real>
+			<real>960</real>
 			<key>ypos</key>
-			<real>865</real>
-		</dict>
-		<key>6676A8DA-4EF6-4DC4-834A-A3D3D4EEEC5F</key>
-		<dict>
-			<key>colorindex</key>
-			<integer>4</integer>
-			<key>xpos</key>
-			<real>465</real>
-			<key>ypos</key>
-			<real>790</real>
+			<real>590</real>
 		</dict>
 		<key>6795AE46-BC1D-4E60-997F-026AA72EC95F</key>
 		<dict>
@@ -1045,12 +1026,12 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>ypos</key>
 			<real>235</real>
 		</dict>
-		<key>7FE62936-C125-48A2-9857-879B401B9074</key>
+		<key>7EE6D84A-08FE-4A1A-A2B8-EF93F3575715</key>
 		<dict>
 			<key>xpos</key>
-			<real>1185</real>
+			<real>430</real>
 			<key>ypos</key>
-			<real>650</real>
+			<real>230</real>
 		</dict>
 		<key>825D446C-98A1-46FC-BA16-60854947B30B</key>
 		<dict>
@@ -1058,15 +1039,6 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<real>70</real>
 			<key>ypos</key>
 			<real>640</real>
-		</dict>
-		<key>836EA27F-6C20-4602-9597-D163AA7C8EEC</key>
-		<dict>
-			<key>colorindex</key>
-			<integer>4</integer>
-			<key>xpos</key>
-			<real>485</real>
-			<key>ypos</key>
-			<real>470</real>
 		</dict>
 		<key>85143491-24AE-41B8-B7B7-C095D1DB0A68</key>
 		<dict>
@@ -1099,6 +1071,15 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>ypos</key>
 			<real>570</real>
 		</dict>
+		<key>A1F1E491-C70B-460A-B27C-61BC8479580C</key>
+		<dict>
+			<key>colorindex</key>
+			<integer>4</integer>
+			<key>xpos</key>
+			<real>485</real>
+			<key>ypos</key>
+			<real>460</real>
+		</dict>
 		<key>A77C5978-3BA8-4159-ABDA-233532AB4E30</key>
 		<dict>
 			<key>colorindex</key>
@@ -1115,9 +1096,9 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>colorindex</key>
 			<integer>1</integer>
 			<key>xpos</key>
-			<real>670</real>
+			<real>1560</real>
 			<key>ypos</key>
-			<real>905</real>
+			<real>630</real>
 		</dict>
 		<key>B89F7C35-B65A-4F9C-9C24-0FFDFEAAA9F1</key>
 		<dict>
@@ -1141,6 +1122,8 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 		</dict>
 		<key>BF83B6EC-FD6C-41D1-B5D0-BD7178CDA4E9</key>
 		<dict>
+			<key>note</key>
+			<string>✅️visited</string>
 			<key>xpos</key>
 			<real>275</real>
 			<key>ypos</key>
@@ -1153,25 +1136,27 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>note</key>
 			<string>✅️ visited</string>
 			<key>xpos</key>
-			<real>670</real>
+			<real>1560</real>
 			<key>ypos</key>
-			<real>860</real>
+			<real>585</real>
 		</dict>
 		<key>ECA62F22-F94B-4CC8-A102-0F495A8D7C39</key>
 		<dict>
 			<key>colorindex</key>
 			<integer>2</integer>
 			<key>xpos</key>
-			<real>670</real>
+			<real>1560</real>
 			<key>ypos</key>
-			<real>960</real>
+			<real>685</real>
 		</dict>
 		<key>F4130124-75E6-46B0-93CF-0CF8AA4C28DB</key>
 		<dict>
+			<key>note</key>
+			<string>❤️ favorites</string>
 			<key>xpos</key>
-			<real>270</real>
+			<real>1160</real>
 			<key>ypos</key>
-			<real>865</real>
+			<real>590</real>
 		</dict>
 		<key>F67815C1-2ABE-4D59-824E-B70F9BFD6CDB</key>
 		<dict>
@@ -1211,7 +1196,7 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>description</key>
 			<string></string>
 			<key>label</key>
-			<string>Open in:</string>
+			<string>Open in</string>
 			<key>type</key>
 			<string>popupbutton</string>
 			<key>variable</key>
@@ -1236,10 +1221,75 @@ Search, favorite, and track your Michelin guide restaurant visits with Alfred.
 			<key>variable</key>
 			<string>INCLUDE_FORMER</string>
 		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>!mm</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<true/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string>Main Keyword</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>MICHELIN_KEY</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>!mf</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<true/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string>Favorites Keyword</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>FAVORITE_KEY</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
+				<string>!mv</string>
+				<key>placeholder</key>
+				<string></string>
+				<key>required</key>
+				<true/>
+				<key>trim</key>
+				<true/>
+			</dict>
+			<key>description</key>
+			<string></string>
+			<key>label</key>
+			<string>Visited Keyword</string>
+			<key>type</key>
+			<string>textfield</string>
+			<key>variable</key>
+			<string>VISITED_KEY</string>
+		</dict>
 	</array>
+	<key>variablesdontexport</key>
+	<array/>
 	<key>version</key>
-	<string>1.0</string>
+	<string>0.1</string>
 	<key>webaddress</key>
-	<string>https://github.com/giovanni/alfred-michelin</string>
+	<string>https://github.com/giovannicoppola/alfred-michelin</string>
 </dict>
 </plist>

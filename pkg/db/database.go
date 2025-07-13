@@ -3,12 +3,12 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"unicode"
 
 	"archive/zip"
 	"io"
-	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	DbFileName = "michelin new.db"
+	DbFileName = "michelin.db"
 )
 
 // NoUpdateAvailableError indicates that no database update file was found
@@ -42,6 +42,34 @@ func normalizeForSearch(text string) string {
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	normalized, _, _ := transform.String(t, text)
 	return strings.ToLower(normalized)
+}
+
+// isCaseSensitiveSearch detects if a search term should be case-sensitive
+// Returns true if the term is all caps or contains partial caps (like "USA", "Italy", "New York")
+func isCaseSensitiveSearch(term string) bool {
+	if term == "" {
+		return false
+	}
+
+	// Check if it's all caps
+	if term == strings.ToUpper(term) && term != strings.ToLower(term) {
+		return true
+	}
+
+	// Check if it contains partial caps (like "New York", "San Francisco", "Hill")
+	words := strings.Fields(term)
+	for _, word := range words {
+		if len(word) > 1 {
+			// Check if the word contains any uppercase letters
+			for _, char := range word {
+				if char >= 'A' && char <= 'Z' {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // MigrateNormalizedColumns adds normalized columns for accent-insensitive search
@@ -156,6 +184,7 @@ type Restaurant struct {
 	PhoneNumber           *string
 	Url                   *string
 	WebsiteUrl            *string
+	ImageURL              *string
 	FacilitiesAndServices *string
 	Description           *string
 	IsFavorite            bool
@@ -241,15 +270,19 @@ func ImportCSV(db *sql.DB, csvPath string) error {
 }
 
 // SearchRestaurants searches for restaurants based on name, location, cuisine, and awards
-func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
-	// Parse search terms
-	terms := strings.Fields(strings.ToLower(query))
+func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
+	// Check if we should include former restaurants (not in guide)
+	includeFormer := os.Getenv("INCLUDE_FORMER") == "1"
+	// Parse search terms - preserve original case for case-sensitive detection
+	originalTerms := strings.Fields(query)
+	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
 	searchTerms := []string{}
+	originalSearchTerms := []string{}
 	greenStarFilter := false
 
 	// Separate award filters from search terms
-	for _, term := range terms {
+	for i, term := range lowerTerms {
 		switch term {
 		case "1s":
 			awardFilters = append(awardFilters, "1 Star")
@@ -265,6 +298,7 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 			greenStarFilter = true
 		default:
 			searchTerms = append(searchTerms, term)
+			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
 		}
 	}
 
@@ -272,22 +306,29 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 
-	// Add text search using both original and normalized columns for accent-insensitive matching
+	// Add text search using case-sensitive or case-insensitive matching based on input
 	if len(searchTerms) > 0 {
-		sqlConditions := []string{}
-		for _, term := range searchTerms {
+		for i, term := range searchTerms {
+			originalTerm := originalSearchTerms[i]
 			normalizedTerm := normalizeForSearch(term)
-			// Search both original columns (case-insensitive) and normalized columns
-			sqlConditions = append(sqlConditions,
-				`(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
-				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`)
-			searchTerm := "%" + term + "%"
-			normalizedSearchTerm := "%" + normalizedTerm + "%"
-			args = append(args, searchTerm, searchTerm, searchTerm,
-				normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+			if isCaseSensitiveSearch(originalTerm) {
+				// Case-sensitive search for terms like "USA", "Italy", "New York"
+				// Use GLOB for whole word matching
+				sqlCondition := `(r.name GLOB ? OR r.location GLOB ? OR r.cuisine GLOB ?)`
+				searchTerm := "*" + originalTerm + "*"
+				args = append(args, searchTerm, searchTerm, searchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			} else {
+				// Case-insensitive search for normal terms
+				sqlCondition := `(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
+				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`
+				searchTerm := "%" + term + "%"
+				normalizedSearchTerm := "%" + normalizedTerm + "%"
+				args = append(args, searchTerm, searchTerm, searchTerm,
+					normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			}
 		}
-		// Use OR between different search terms to be more inclusive
-		whereClause += " AND (" + strings.Join(sqlConditions, " OR ") + ")"
 	}
 
 	// Add award filters
@@ -308,11 +349,22 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
+	if !includeFormer {
+		whereClause += " AND r.in_guide = 1"
+	}
+
+	// Add LIMIT clause if no search terms provided (empty query)
+	limitClause := ""
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+		limitClause = " LIMIT 100"
+	}
+
 	// Query restaurants with enhanced search and sorting
 	queryStr := `
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
@@ -352,11 +404,15 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 				ELSE 7
 			END,
 			r.name
-	`
+		` + limitClause
+
+	// Debug: Print the query and args
+	fmt.Fprintf(os.Stderr, "[DEBUG] SQL Query: %s\n", queryStr)
+	fmt.Fprintf(os.Stderr, "[DEBUG] Args: %v\n", args)
 
 	rows, err := db.Query(queryStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("search query failed: %v", err)
+		return nil, false, fmt.Errorf("search query failed: %v", err)
 	}
 	defer rows.Close()
 
@@ -366,12 +422,12 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+			&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan row: %v", err)
+			return nil, false, fmt.Errorf("failed to scan row: %v", err)
 		}
 
 		// No need for additional filtering - all accent-insensitive matching is now handled by the database query
@@ -379,19 +435,26 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		restaurants = append(restaurants, r)
 	}
 
-	return restaurants, nil
+	// Check if this was an empty search (no search terms, no filters)
+	isEmptySearch := len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter
+
+	return restaurants, isEmptySearch, nil
 }
 
 // SearchFavoriteRestaurants searches within favorite restaurants only
 func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
-	// Parse search terms
-	terms := strings.Fields(strings.ToLower(query))
+	// Check if we should include former restaurants (not in guide)
+	includeFormer := os.Getenv("INCLUDE_FORMER") == "1"
+	// Parse search terms - preserve original case for case-sensitive detection
+	originalTerms := strings.Fields(query)
+	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
 	searchTerms := []string{}
+	originalSearchTerms := []string{}
 	greenStarFilter := false
 
 	// Separate award filters from search terms
-	for _, term := range terms {
+	for i, term := range lowerTerms {
 		switch term {
 		case "1s":
 			awardFilters = append(awardFilters, "1 Star")
@@ -407,6 +470,7 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 			greenStarFilter = true
 		default:
 			searchTerms = append(searchTerms, term)
+			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
 		}
 	}
 
@@ -414,22 +478,29 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 
-	// Add text search using both original and normalized columns for accent-insensitive matching
+	// Add text search using case-sensitive or case-insensitive matching based on input
 	if len(searchTerms) > 0 {
-		sqlConditions := []string{}
-		for _, term := range searchTerms {
+		for i, term := range searchTerms {
+			originalTerm := originalSearchTerms[i]
 			normalizedTerm := normalizeForSearch(term)
-			// Search both original columns (case-insensitive) and normalized columns
-			sqlConditions = append(sqlConditions,
-				`(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
-				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`)
-			searchTerm := "%" + term + "%"
-			normalizedSearchTerm := "%" + normalizedTerm + "%"
-			args = append(args, searchTerm, searchTerm, searchTerm,
-				normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+			if isCaseSensitiveSearch(originalTerm) {
+				// Case-sensitive search for terms like "USA", "Italy", "New York"
+				// Use GLOB for whole word matching
+				sqlCondition := `(r.name GLOB ? OR r.location GLOB ? OR r.cuisine GLOB ?)`
+				searchTerm := "*" + originalTerm + "*"
+				args = append(args, searchTerm, searchTerm, searchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			} else {
+				// Case-insensitive search for normal terms
+				sqlCondition := `(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
+				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`
+				searchTerm := "%" + term + "%"
+				normalizedSearchTerm := "%" + normalizedTerm + "%"
+				args = append(args, searchTerm, searchTerm, searchTerm,
+					normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			}
 		}
-		// Use OR between different search terms to be more inclusive
-		whereClause += " AND (" + strings.Join(sqlConditions, " OR ") + ")"
 	}
 
 	// Add award filters
@@ -450,11 +521,22 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
+	if !includeFormer {
+		whereClause += " AND r.in_guide = 1"
+	}
+
+	// Add LIMIT clause if no search terms provided (empty query)
+	limitClause := ""
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+		limitClause = " LIMIT 100"
+	}
+
 	// Query restaurants with enhanced search and sorting - INNER JOIN with user_favorites to only get favorites
 	queryStr := `
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			1 as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
@@ -493,7 +575,7 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 				ELSE 7
 			END,
 			r.name
-	`
+		` + limitClause
 
 	rows, err := db.Query(queryStr, args...)
 	if err != nil {
@@ -507,7 +589,7 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+			&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
@@ -523,14 +605,18 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 
 // SearchVisitedRestaurants searches within visited restaurants only
 func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
-	// Parse search terms
-	terms := strings.Fields(strings.ToLower(query))
+	// Check if we should include former restaurants (not in guide)
+	includeFormer := os.Getenv("INCLUDE_FORMER") == "1"
+	// Parse search terms - preserve original case for case-sensitive detection
+	originalTerms := strings.Fields(query)
+	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
 	searchTerms := []string{}
+	originalSearchTerms := []string{}
 	greenStarFilter := false
 
 	// Separate award filters from search terms
-	for _, term := range terms {
+	for i, term := range lowerTerms {
 		switch term {
 		case "1s":
 			awardFilters = append(awardFilters, "1 Star")
@@ -546,6 +632,7 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 			greenStarFilter = true
 		default:
 			searchTerms = append(searchTerms, term)
+			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
 		}
 	}
 
@@ -553,22 +640,29 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	whereClause := "WHERE 1=1"
 	args := []interface{}{}
 
-	// Add text search using both original and normalized columns for accent-insensitive matching
+	// Add text search using case-sensitive or case-insensitive matching based on input
 	if len(searchTerms) > 0 {
-		sqlConditions := []string{}
-		for _, term := range searchTerms {
+		for i, term := range searchTerms {
+			originalTerm := originalSearchTerms[i]
 			normalizedTerm := normalizeForSearch(term)
-			// Search both original columns (case-insensitive) and normalized columns
-			sqlConditions = append(sqlConditions,
-				`(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
-				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`)
-			searchTerm := "%" + term + "%"
-			normalizedSearchTerm := "%" + normalizedTerm + "%"
-			args = append(args, searchTerm, searchTerm, searchTerm,
-				normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+			if isCaseSensitiveSearch(originalTerm) {
+				// Case-sensitive search for terms like "USA", "Italy", "New York"
+				// Use GLOB for whole word matching
+				sqlCondition := `(r.name GLOB ? OR r.location GLOB ? OR r.cuisine GLOB ?)`
+				searchTerm := "*" + originalTerm + "*"
+				args = append(args, searchTerm, searchTerm, searchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			} else {
+				// Case-insensitive search for normal terms
+				sqlCondition := `(LOWER(r.name) LIKE ? OR LOWER(r.location) LIKE ? OR LOWER(r.cuisine) LIKE ? OR 
+				  r.name_normalized LIKE ? OR r.location_normalized LIKE ? OR r.cuisine_normalized LIKE ?)`
+				searchTerm := "%" + term + "%"
+				normalizedSearchTerm := "%" + normalizedTerm + "%"
+				args = append(args, searchTerm, searchTerm, searchTerm,
+					normalizedSearchTerm, normalizedSearchTerm, normalizedSearchTerm)
+				whereClause += " AND (" + sqlCondition + ")"
+			}
 		}
-		// Use OR between different search terms to be more inclusive
-		whereClause += " AND (" + strings.Join(sqlConditions, " OR ") + ")"
 	}
 
 	// Add award filters
@@ -589,11 +683,22 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
+	if !includeFormer {
+		whereClause += " AND r.in_guide = 1"
+	}
+
+	// Add LIMIT clause if no search terms provided (empty query)
+	limitClause := ""
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+		limitClause = " LIMIT 100"
+	}
+
 	// Query restaurants with enhanced search and sorting - INNER JOIN with user_visits to only get visited
 	queryStr := `
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			1 as is_visited,
@@ -622,7 +727,6 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		) ra ON r.id = ra.restaurant_id
 		` + whereClause + `
 		ORDER BY 
-			uv.visited_date DESC,
 			CASE 
 				WHEN ra.distinction = '3 Stars' THEN 1
 				WHEN ra.distinction = '2 Stars' THEN 2
@@ -633,7 +737,7 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 				ELSE 7
 			END,
 			r.name
-	`
+		` + limitClause
 
 	rows, err := db.Query(queryStr, args...)
 	if err != nil {
@@ -647,7 +751,7 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+			&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
@@ -667,7 +771,7 @@ func GetRestaurantByID(db *sql.DB, id int64) (Restaurant, error) {
 	err := db.QueryRow(`
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
@@ -698,7 +802,7 @@ func GetRestaurantByID(db *sql.DB, id int64) (Restaurant, error) {
 	`, id).Scan(
 		&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 		&r.Longitude, &r.Latitude, &r.PhoneNumber,
-		&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+		&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 		&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 		&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 	)
@@ -778,7 +882,7 @@ func GetFavoriteRestaurants(db *sql.DB) ([]Restaurant, error) {
 	rows, err := db.Query(`
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			1 as is_favorite,
 			CASE WHEN uv.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_visited,
@@ -819,7 +923,7 @@ func GetFavoriteRestaurants(db *sql.DB) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+			&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
@@ -837,7 +941,7 @@ func GetVisitedRestaurants(db *sql.DB) ([]Restaurant, error) {
 	rows, err := db.Query(`
 		SELECT 
 			r.id, r.name, r.address, r.location, r.cuisine, r.longitude, r.latitude,
-			r.phone_number, r.url, r.website_url, r.facilities_and_services, 
+			r.phone_number, r.url, r.website_url, r.image_url, r.facilities_and_services, 
 			r.description, r.in_guide,
 			CASE WHEN uf.restaurant_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite,
 			1 as is_visited,
@@ -878,7 +982,7 @@ func GetVisitedRestaurants(db *sql.DB) ([]Restaurant, error) {
 		err := rows.Scan(
 			&r.ID, &r.Name, &r.Address, &r.Location, &r.Cuisine,
 			&r.Longitude, &r.Latitude, &r.PhoneNumber,
-			&r.Url, &r.WebsiteUrl, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
+			&r.Url, &r.WebsiteUrl, &r.ImageURL, &r.FacilitiesAndServices, &r.Description, &r.InGuide,
 			&r.IsFavorite, &r.IsVisited, &r.VisitedDate, &r.VisitedNotes,
 			&r.CurrentAward, &r.CurrentPrice, &r.CurrentGreenStar, &r.CurrentAwardYear, &r.CurrentAwardLastYear,
 		)
@@ -1196,9 +1300,26 @@ type UserVisit struct {
 
 // getRestaurantCount returns the total number of restaurants in the database
 func getRestaurantCount(db *sql.DB) (int, error) {
+	// Check if we should include former restaurants (not in guide)
+	includeFormer := os.Getenv("INCLUDE_FORMER") == "1"
+
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM restaurants").Scan(&count)
+	var err error
+
+	if includeFormer {
+		// Count all restaurants
+		err = db.QueryRow("SELECT COUNT(*) FROM restaurants").Scan(&count)
+	} else {
+		// Count only current guide restaurants
+		err = db.QueryRow("SELECT COUNT(*) FROM restaurants WHERE in_guide = 1").Scan(&count)
+	}
+
 	return count, err
+}
+
+// GetTotalRestaurantCount returns the total number of restaurants in the database
+func GetTotalRestaurantCount(db *sql.DB) (int, error) {
+	return getRestaurantCount(db)
 }
 
 // getUserFavorites retrieves all user favorites from the database

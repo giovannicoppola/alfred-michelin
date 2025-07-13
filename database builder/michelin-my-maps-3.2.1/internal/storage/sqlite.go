@@ -73,7 +73,7 @@ func (r *SQLiteRepository) SaveRestaurant(ctx context.Context, restaurant *model
 			"name", "description", "address", "location",
 			"latitude", "longitude", "cuisine",
 			"facilities_and_services", "phone_number", "website_url",
-			"in_guide", "updated_at",
+			"image_url", "in_guide", "updated_at",
 		}),
 	}).Create(restaurant).Error
 }
@@ -246,7 +246,7 @@ func (r *SQLiteRepository) UpsertRestaurantWithAward(ctx context.Context, data R
 // Keep only one ListAllRestaurantsWithURL implementation
 func (r *SQLiteRepository) ListAllRestaurantsWithURL() ([]models.Restaurant, error) {
 	var restaurants []models.Restaurant
-	err := r.db.Where("url != ''").Find(&restaurants).Error
+	err := r.db.Where("url != ''").Order("created_at DESC").Find(&restaurants).Error
 	return restaurants, err
 }
 

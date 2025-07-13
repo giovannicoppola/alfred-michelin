@@ -1,9 +1,13 @@
 package main
 
 import (
+	"archive/zip"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,7 +38,6 @@ type Mod struct {
 
 // Alfred item structure for results
 type AlfredItem struct {
-	UID          string                 `json:"uid,omitempty"`
 	Title        string                 `json:"title"`
 	Subtitle     string                 `json:"subtitle,omitempty"`
 	Arg          string                 `json:"arg,omitempty"`
@@ -65,11 +68,120 @@ func timeQuery(operation string, fn func() error) error {
 	return err
 }
 
+// initializeDatabase handles database initialization and updates
+func initializeDatabase() error {
+	// 1. Check if the workflow data folder exists, create if not
+	workflowDataDir := os.Getenv("alfred_workflow_data")
+	if workflowDataDir == "" {
+		return fmt.Errorf("alfred_workflow_data environment variable not set")
+	}
+
+	if err := os.MkdirAll(workflowDataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workflow data directory: %v", err)
+	}
+
+	// 2. Check if michelin.db.zip is present in current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %v", err)
+	}
+
+	zipPath := filepath.Join(currentDir, "michelin.db.zip")
+	zipExists := false
+	if _, err := os.Stat(zipPath); err == nil {
+		zipExists = true
+	}
+
+	if !zipExists {
+		// Check if michelin.db exists in workflow data folder
+		dbPath := filepath.Join(workflowDataDir, "michelin.db")
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			// Database doesn't exist, show error
+			items := []AlfredItem{
+				{
+					Title:    "Error, missing database",
+					Subtitle: "delete and re-install this workflow, or contact the developer",
+					Valid:    false,
+				},
+			}
+			result := AlfredResult{Items: items}
+			printJSON(result)
+			return fmt.Errorf("missing database file")
+		}
+		// Database exists, no action needed
+		return nil
+	}
+
+	// 3. Zip file exists, extract and move database
+	fmt.Fprintf(os.Stderr, "[DEBUG] Found michelin.db.zip, extracting...\n")
+
+	// Create temporary directory for extraction
+	tempDir, err := os.MkdirTemp("", "michelin_extract_")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Extract the zip file
+	extractedDbPath := filepath.Join(tempDir, "michelin.db")
+	if err := extractZipFile(zipPath, extractedDbPath); err != nil {
+		return fmt.Errorf("failed to extract zip file: %v", err)
+	}
+
+	// Check if extracted database exists
+	if _, err := os.Stat(extractedDbPath); os.IsNotExist(err) {
+		return fmt.Errorf("no michelin.db found in zip file")
+	}
+
+	// Move to workflow data directory
+	targetDbPath := filepath.Join(workflowDataDir, "michelin.db")
+
+	// Check if database already exists and preserve user data
+	if _, err := os.Stat(targetDbPath); err == nil {
+		backupPath := filepath.Join(workflowDataDir, "michelin_backup.db")
+		if err := os.Rename(targetDbPath, backupPath); err != nil {
+			return fmt.Errorf("failed to create backup of existing database: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "[DEBUG] Created backup of existing database\n")
+
+		// Preserve user data from backup to new database
+		if err := preserveUserData(backupPath, extractedDbPath); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Failed to preserve user data: %v\n", err)
+			// Continue anyway, but log the warning
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] User data preserved successfully\n")
+		}
+	}
+
+	// Copy new database to target location
+	if err := copyFile(extractedDbPath, targetDbPath); err != nil {
+		return fmt.Errorf("failed to copy database to target location: %v", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "[DEBUG] Database updated successfully\n")
+
+	// 4. Delete the zip file
+	if err := os.Remove(zipPath); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARNING] Failed to remove zip file: %v\n", err)
+		// Don't return error here as the database update was successful
+	} else {
+		fmt.Fprintf(os.Stderr, "[DEBUG] Removed zip file\n")
+	}
+
+	return nil
+}
+
 // Main function
 func main() {
 	// Check command-line arguments
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "[ERROR] Usage: alfred-michelin [command] [arguments]\n")
+		os.Exit(1)
+	}
+
+	// Initialize database and check for updates
+	if err := initializeDatabase(); err != nil {
+		showError(fmt.Sprintf("Database initialization failed: %v", err))
 		os.Exit(1)
 	}
 
@@ -80,8 +192,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize database directly in the workflow directory
-	dbPath := filepath.Join(workDir, db.DbFileName)
+	// Use the same database path that initializeDatabase() uses
+	workflowDataDir := os.Getenv("alfred_workflow_data")
+	if workflowDataDir == "" {
+		workflowDataDir = workDir // fallback to workflow directory
+	}
+	dbPath := filepath.Join(workflowDataDir, db.DbFileName)
 	database, err := db.Initialize(dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing database: %v\n", err)
@@ -149,18 +265,6 @@ func main() {
 			fmt.Fprintf(os.Stderr, "[DEBUG] Search in normal mode\n")
 			handleSearch(database, query)
 		}
-
-	case "get":
-		if len(os.Args) < 3 {
-			showError("Missing restaurant ID")
-			return
-		}
-		id, err := strconv.ParseInt(os.Args[2], 10, 64)
-		if err != nil {
-			showError("Invalid restaurant ID")
-			return
-		}
-		handleGetRestaurant(database, id)
 
 	case "toggle-favorite":
 		if len(os.Args) < 3 {
@@ -288,9 +392,9 @@ func main() {
 			handleSearch(database, query)
 		}
 
-	case "update-database":
-		fmt.Fprintf(os.Stderr, "[DEBUG] Update database command called\n")
-		handleUpdateDatabase(dbPath)
+	case "showDescription":
+		fmt.Fprintf(os.Stderr, "[DEBUG] Show description command called\n")
+		handleShowDescription(workDir)
 
 	default:
 		showError(fmt.Sprintf("Unknown command: %s", command))
@@ -319,8 +423,9 @@ func handleSearch(database *sql.DB, query string) {
 	var restaurants []db.Restaurant
 	var err error
 
+	var isEmptySearch bool
 	timeQuery(fmt.Sprintf("search query: '%s'", query), func() error {
-		restaurants, err = db.SearchRestaurants(database, query)
+		restaurants, isEmptySearch, err = db.SearchRestaurants(database, query)
 		return err
 	})
 
@@ -337,7 +442,20 @@ func handleSearch(database *sql.DB, query string) {
 
 	// Format results for Alfred
 	items := make([]AlfredItem, 0, len(restaurants))
-	totalCount := len(restaurants)
+
+	// Determine total count based on search type
+	var totalCount int
+	if isEmptySearch {
+		// For empty search, get total database count
+		totalCount, err = db.GetTotalRestaurantCount(database)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to get total count: %v\n", err)
+			totalCount = len(restaurants) // Fallback to result count
+		}
+	} else {
+		// For actual searches, use result count
+		totalCount = len(restaurants)
+	}
 
 	for i, r := range restaurants {
 		// Get cuisine or set default value
@@ -383,30 +501,99 @@ func handleSearch(database *sql.DB, query string) {
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
 
-		// Get the appropriate URL based on OPEN_IN preference
-		openInURL := getOpenInURL(r)
+		// Determine the OPEN_IN_URL variable based on user preference
+		openIn := os.Getenv("OPEN_IN")
+		var openInURL string
+		if openIn == "" {
+			openIn = "restaurant" // default
+		}
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				openInURL = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					encodedName := url.QueryEscape(*r.Name)
+					openInURL = fmt.Sprintf("https://www.google.com/maps?q=%s&ll=%s,%s&z=15", encodedName, *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://www.google.com/maps?ll=%s,%s&z=15", *r.Latitude, *r.Longitude)
+				}
+			}
+		case "apple_maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?q=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
+		}
+
+		arg := restaurantName
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				arg = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				arg = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				arg = *r.Url
+			}
+		case "maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					encodedName := url.QueryEscape(*r.Name)
+					arg = fmt.Sprintf("https://www.google.com/maps?q=%s&ll=%s,%s&z=15", encodedName, *r.Latitude, *r.Longitude)
+				} else {
+					arg = fmt.Sprintf("https://www.google.com/maps?ll=%s,%s&z=15", *r.Latitude, *r.Longitude)
+				}
+			}
+		case "apple_maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					arg = fmt.Sprintf("maps://?address=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					arg = fmt.Sprintf("maps://?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
+		}
 
 		item := AlfredItem{
-			UID:   fmt.Sprintf("restaurant-%d", r.ID),
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
 				counter,
 				location,
 				award,
 				cuisine),
-			Arg: restaurantName,
+			Arg: arg,
 
 			Valid: true,
 			Variables: map[string]interface{}{
-				"restaurant_id":   r.ID,
-				"restaurant_name": restaurantName,
-				"is_favorite":     r.IsFavorite,
-				"is_visited":      r.IsVisited,
-				"OPEN_IN":         openInURL,
-				"search_query":    query,
-				"mode":            "",
-				"favorite_emoji":  favoriteEmoji,
-				"visited_emoji":   visitedEmoji,
+				"restaurant_id":      r.ID,
+				"restaurant_name":    restaurantName,
+				"is_favorite":        r.IsFavorite,
+				"is_visited":         r.IsVisited,
+				"restaurant_url":     r.Url,
+				"website_url":        r.WebsiteUrl,
+				"search_query":       query,
+				"mode":               "",
+				"favorite_emoji":     favoriteEmoji,
+				"visited_emoji":      visitedEmoji,
+				"myDescription":      r.Description,
+				"imageURL":           r.ImageURL,
+				"restaurant_address": r.Address,
+				"restaurant_award":   award,
+				"OPEN_IN_URL":        openInURL,
 			},
 			Mods: map[string]Mod{
 				"ctrl": {
@@ -418,10 +605,23 @@ func handleSearch(database *sql.DB, query string) {
 			},
 		}
 
-		// Add icon for bib gourmand
-		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
+		// Add icon based on award type and guide status
+		if r.InGuide == 0 {
+			// Restaurant no longer in guide - show black star
 			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+				"path": "../source/icons/blackStar.png",
+			}
+		} else if r.CurrentAward != nil {
+			// Restaurant in guide - show award-based icon
+			awardLower := strings.ToLower(*r.CurrentAward)
+			if strings.Contains(awardLower, "bib gourmand") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/bibg.png",
+				}
+			} else if strings.Contains(awardLower, "selected restaurant") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/star.png",
+				}
 			}
 		}
 
@@ -499,34 +699,80 @@ func handleSearchFavorites(database *sql.DB, query string) {
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
 
-		// Get the appropriate URL based on OPEN_IN preference
-		openInURL := getOpenInURL(r)
+		// Determine the OPEN_IN_URL variable based on user preference
+		openIn := os.Getenv("OPEN_IN")
+		var openInURL string
+		if openIn == "" {
+			openIn = "restaurant" // default
+		}
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				openInURL = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://www.google.com/maps/place/%s/@%s,%s,17z", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://www.google.com/maps/@%s,%s,17z", *r.Latitude, *r.Longitude)
+				}
+			}
+		case "apple_maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?q=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
+		}
+
+		arg := fmt.Sprintf("%d", r.ID)
 
 		item := AlfredItem{
-			UID:   fmt.Sprintf("restaurant-%d", r.ID),
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
 				counter,
 				location,
 				award,
 				cuisine),
-			Arg:   fmt.Sprintf("%d", r.ID),
+			Arg:   arg,
 			Valid: true,
 			Variables: map[string]interface{}{
-				"restaurant_id":   r.ID,
-				"restaurant_name": restaurantName,
-				"is_favorite":     r.IsFavorite,
-				"is_visited":      r.IsVisited,
-				"OPEN_IN":         openInURL,
-				"search_query":    query,
-				"mode":            "favorites",
+				"restaurant_id":      r.ID,
+				"restaurant_name":    restaurantName,
+				"is_favorite":        r.IsFavorite,
+				"is_visited":         r.IsVisited,
+				"restaurant_url":     r.Url,
+				"website_url":        r.WebsiteUrl,
+				"search_query":       query,
+				"mode":               "favorites",
+				"imageURL":           r.ImageURL,
+				"myDescription":      r.Description,
+				"restaurant_address": r.Address,
+				"restaurant_award":   award,
+				"OPEN_IN_URL":        openInURL,
 			},
 		}
 
-		// Add icon for bib gourmand
-		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
-			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+		// Add icon based on award type
+		if r.CurrentAward != nil {
+			awardLower := strings.ToLower(*r.CurrentAward)
+			if strings.Contains(awardLower, "bib gourmand") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/bibg.png",
+				}
+			} else if strings.Contains(awardLower, "selected restaurant") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/star.png",
+				}
 			}
 		}
 
@@ -604,9 +850,6 @@ func handleSearchVisited(database *sql.DB, query string) {
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
 
-		// Get the appropriate URL based on OPEN_IN preference
-		openInURL := getOpenInURL(r)
-
 		// Create Alfred item
 		subtitle := fmt.Sprintf("%s | %s | %s | %s",
 			counter,
@@ -616,175 +859,88 @@ func handleSearchVisited(database *sql.DB, query string) {
 
 		// Add visit date if available
 		if r.VisitedDate != nil && *r.VisitedDate != "" {
-			subtitle = fmt.Sprintf("Visited: %s | %s", *r.VisitedDate, subtitle)
+			subtitle = fmt.Sprintf("%s | Visited: %s", subtitle, *r.VisitedDate)
+		}
+
+		// Determine the OPEN_IN_URL variable based on user preference
+		openIn := os.Getenv("OPEN_IN")
+		var openInURL string
+		if openIn == "" {
+			openIn = "restaurant" // default
+		}
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				openInURL = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://www.google.com/maps/place/%s/@%s,%s,17z", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://www.google.com/maps/@%s,%s,17z", *r.Latitude, *r.Longitude)
+				}
+			}
+		case "apple_maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?q=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
+		}
+
+		// Determine the argument (URL to open)
+		arg := fmt.Sprintf("%d", r.ID)
+		if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+			arg = *r.WebsiteUrl
+		} else if r.Url != nil && *r.Url != "" {
+			arg = *r.Url
 		}
 
 		item := AlfredItem{
-			UID:      fmt.Sprintf("restaurant-%d", r.ID),
 			Title:    restaurantName,
 			Subtitle: subtitle,
-			Arg:      fmt.Sprintf("%d", r.ID),
+			Arg:      arg,
 			Valid:    true,
 			Variables: map[string]interface{}{
-				"restaurant_id":   r.ID,
-				"restaurant_name": restaurantName,
-				"OPEN_IN":         openInURL,
-				"search_query":    query,
-				"mode":            "visited",
+				"restaurant_id":      r.ID,
+				"restaurant_name":    restaurantName,
+				"restaurant_url":     r.Url,
+				"website_url":        r.WebsiteUrl,
+				"search_query":       query,
+				"mode":               "visited",
+				"imageURL":           r.ImageURL,
+				"myDescription":      r.Description,
+				"restaurant_address": r.Address,
+				"restaurant_award":   award,
+				"OPEN_IN_URL":        openInURL,
 			},
 		}
 
-		// Add icon for bib gourmand
-		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
-			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+		// Add icon based on award type
+		if r.CurrentAward != nil {
+			awardLower := strings.ToLower(*r.CurrentAward)
+			if strings.Contains(awardLower, "bib gourmand") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/bibg.png",
+				}
+			} else if strings.Contains(awardLower, "selected restaurant") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/star.png",
+				}
 			}
 		}
 
 		items = append(items, item)
 	}
-
-	// Return results
-	result := AlfredResult{Items: items}
-	if err := printJSON(result); err != nil {
-		showError(fmt.Sprintf("Error formatting results: %v", err))
-	}
-}
-
-// handleGetRestaurant gets details for a specific restaurant
-func handleGetRestaurant(database *sql.DB, id int64) {
-	// Get restaurant by ID with timing
-	var restaurant db.Restaurant
-	var err error
-
-	timeQuery(fmt.Sprintf("get restaurant id: %d", id), func() error {
-		restaurant, err = db.GetRestaurantByID(database, id)
-		return err
-	})
-
-	if err != nil {
-		showError(fmt.Sprintf("Error getting restaurant: %v", err))
-		return
-	}
-
-	// Get cuisine or set default value
-	cuisine := "Unknown cuisine"
-	if restaurant.Cuisine != nil && *restaurant.Cuisine != "" {
-		cuisine = *restaurant.Cuisine
-	}
-
-	// Get location or set default value
-	location := "Unknown location"
-	if restaurant.Location != nil && *restaurant.Location != "" {
-		location = *restaurant.Location
-	}
-
-	// Get restaurant name
-	restaurantName := "Unknown restaurant"
-	if restaurant.Name != nil && *restaurant.Name != "" {
-		restaurantName = *restaurant.Name
-	}
-
-	// Format award display with stars and year
-	award := formatAwardWithYearRange(restaurant.CurrentAward, restaurant.CurrentAwardYear, restaurant.CurrentAwardLastYear, restaurant.CurrentGreenStar, restaurant.InGuide)
-
-	// Create items for different actions
-	items := []AlfredItem{
-		{
-			Title:    restaurantName,
-			Subtitle: fmt.Sprintf("%s | %s | %s", location, award, cuisine),
-			Arg:      fmt.Sprintf("%d", restaurant.ID),
-			Valid:    false,
-		},
-	}
-
-	// Add icon for bib gourmand
-	if restaurant.CurrentAward != nil && strings.Contains(strings.ToLower(*restaurant.CurrentAward), "bib gourmand") {
-		items[0].Icon = map[string]string{
-			"path": "../source/icons/bibg.png",
-		}
-	}
-
-	// Add website item if available
-	if restaurant.WebsiteUrl != nil && *restaurant.WebsiteUrl != "" {
-		items = append(items, AlfredItem{
-			Title:    "🌐 Open Website",
-			Subtitle: *restaurant.WebsiteUrl,
-			Arg:      *restaurant.WebsiteUrl,
-			Valid:    true,
-		})
-	}
-
-	// Add Michelin Guide item if available
-	if restaurant.Url != nil && *restaurant.Url != "" {
-		items = append(items, AlfredItem{
-			Title:    "🔍 View on Michelin Guide",
-			Subtitle: *restaurant.Url,
-			Arg:      *restaurant.Url,
-			Valid:    true,
-		})
-	}
-
-	// Add maps item if coordinates are available
-	hasLatLng := restaurant.Latitude != nil && restaurant.Longitude != nil &&
-		*restaurant.Latitude != "" && *restaurant.Longitude != ""
-
-	address := "Unknown address"
-	if restaurant.Address != nil && *restaurant.Address != "" {
-		address = *restaurant.Address
-	}
-
-	if hasLatLng {
-		// Use restaurant name with coordinates for better identification
-		mapQuery := strings.ReplaceAll(restaurantName, " ", "+")
-		items = append(items, AlfredItem{
-			Title:    "📍 View on Google Maps",
-			Subtitle: address,
-			Arg:      fmt.Sprintf("https://www.google.com/maps?q=%s&ll=%s,%s", mapQuery, *restaurant.Latitude, *restaurant.Longitude),
-			Valid:    true,
-		})
-	}
-
-	// Add toggle favorite action
-	favoriteTitle := "❤️ Add to Favorites"
-	if restaurant.IsFavorite {
-		favoriteTitle = "💔 Remove from Favorites"
-	}
-	items = append(items, AlfredItem{
-		Title:    favoriteTitle,
-		Subtitle: "Toggle favorite status",
-		Arg:      fmt.Sprintf("%d", restaurant.ID),
-		Valid:    true,
-		Variables: map[string]interface{}{
-			"action": "toggle-favorite",
-		},
-	})
-
-	// Add toggle visited action
-	visitedTitle := "✅ Mark as Visited"
-	if restaurant.IsVisited {
-		visitedTitle = "❌ Mark as Not Visited"
-	}
-	items = append(items, AlfredItem{
-		Title:    visitedTitle,
-		Subtitle: "Toggle visited status",
-		Arg:      fmt.Sprintf("%d", restaurant.ID),
-		Valid:    true,
-		Variables: map[string]interface{}{
-			"action": "toggle-visited",
-		},
-	})
-
-	// Add award history action
-	items = append(items, AlfredItem{
-		Title:    "🏆 View Award History",
-		Subtitle: "Show award history for this restaurant (SHIFT modifier)",
-		Arg:      fmt.Sprintf("%d", restaurant.ID),
-		Valid:    true,
-		Variables: map[string]interface{}{
-			"action": "award-history",
-		},
-	})
 
 	// Return results
 	result := AlfredResult{Items: items}
@@ -913,32 +1069,79 @@ func handleFavorites(database *sql.DB) {
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
 
-		// Get the appropriate URL based on OPEN_IN preference
-		openInURL := getOpenInURL(r)
+		// Determine the OPEN_IN_URL variable based on user preference
+		openIn := os.Getenv("OPEN_IN")
+		var openInURL string
+		if openIn == "" {
+			openIn = "restaurant" // default
+		}
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				openInURL = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				openInURL = fmt.Sprintf("https://www.google.com/maps/@%s,%s,17z", *r.Latitude, *r.Longitude)
+			}
+		case "apple_maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?q=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
+		}
 
-		// Create Alfred item
+		// Determine the argument (URL to open)
+		arg := fmt.Sprintf("%d", r.ID)
+		if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+			arg = *r.WebsiteUrl
+		} else if r.Url != nil && *r.Url != "" {
+			arg = *r.Url
+		}
+
 		item := AlfredItem{
-			UID:   fmt.Sprintf("restaurant-%d", r.ID),
 			Title: restaurantName,
 			Subtitle: fmt.Sprintf("%s | %s | %s | %s",
 				counter,
 				location,
 				award,
 				cuisine),
-			Arg:   fmt.Sprintf("%d", r.ID),
+			Arg:   arg,
 			Valid: true,
 			Variables: map[string]interface{}{
-				"restaurant_id":   r.ID,
-				"restaurant_name": restaurantName,
-				"OPEN_IN":         openInURL,
-				"mode":            "favorites",
+				"restaurant_id":      r.ID,
+				"restaurant_name":    restaurantName,
+				"restaurant_url":     r.Url,
+				"website_url":        r.WebsiteUrl,
+				"mode":               "favorites",
+				"imageURL":           r.ImageURL,
+				"myDescription":      r.Description,
+				"restaurant_address": r.Address,
+				"restaurant_award":   award,
+				"OPEN_IN_URL":        openInURL,
 			},
 		}
 
-		// Add icon for bib gourmand
-		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
-			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+		// Add icon based on award type
+		if r.CurrentAward != nil {
+			awardLower := strings.ToLower(*r.CurrentAward)
+			if strings.Contains(awardLower, "bib gourmand") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/bibg.png",
+				}
+			} else if strings.Contains(awardLower, "selected restaurant") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/star.png",
+				}
 			}
 		}
 
@@ -1016,9 +1219,6 @@ func handleVisited(database *sql.DB) {
 		// Create counter prefix
 		counter := fmt.Sprintf("%s/%s", formatNumber(i+1), formatNumber(totalCount))
 
-		// Get the appropriate URL based on OPEN_IN preference
-		openInURL := getOpenInURL(r)
-
 		// Create Alfred item
 		subtitle := fmt.Sprintf("%s | %s | %s | %s",
 			counter,
@@ -1026,29 +1226,72 @@ func handleVisited(database *sql.DB) {
 			award,
 			cuisine)
 
-		// Add visit date if available
+		// Add visit date at the end if available
 		if r.VisitedDate != nil && *r.VisitedDate != "" {
-			subtitle = fmt.Sprintf("Visited: %s | %s", *r.VisitedDate, subtitle)
+			subtitle = fmt.Sprintf("%s | Visited: %s", subtitle, *r.VisitedDate)
+		}
+
+		// Determine the OPEN_IN_URL variable based on user preference
+		openIn := os.Getenv("OPEN_IN")
+		var openInURL string
+		if openIn == "" {
+			openIn = "restaurant" // default
+		}
+		switch openIn {
+		case "restaurant":
+			if r.WebsiteUrl != nil && *r.WebsiteUrl != "" {
+				openInURL = *r.WebsiteUrl
+			} else if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "michelin":
+			if r.Url != nil && *r.Url != "" {
+				openInURL = *r.Url
+			}
+		case "maps":
+			if r.Longitude != nil && r.Latitude != nil && *r.Longitude != "" && *r.Latitude != "" {
+				openInURL = fmt.Sprintf("https://www.google.com/maps/@%s,%s,17z", *r.Latitude, *r.Longitude)
+			}
+		case "apple_maps":
+			if r.Latitude != nil && r.Longitude != nil && *r.Latitude != "" && *r.Longitude != "" {
+				if r.Name != nil && *r.Name != "" {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?q=%s&ll=%s,%s", url.QueryEscape(*r.Name), *r.Latitude, *r.Longitude)
+				} else {
+					openInURL = fmt.Sprintf("https://maps.apple.com/?ll=%s,%s", *r.Latitude, *r.Longitude)
+				}
+			}
 		}
 
 		item := AlfredItem{
-			UID:      fmt.Sprintf("restaurant-%d", r.ID),
 			Title:    restaurantName,
 			Subtitle: subtitle,
 			Arg:      fmt.Sprintf("%d", r.ID),
 			Valid:    true,
 			Variables: map[string]interface{}{
-				"restaurant_id":   r.ID,
-				"restaurant_name": restaurantName,
-				"OPEN_IN":         openInURL,
-				"mode":            "visited",
+				"restaurant_id":      r.ID,
+				"restaurant_name":    restaurantName,
+				"restaurant_url":     r.Url,
+				"website_url":        r.WebsiteUrl,
+				"mode":               "visited",
+				"imageURL":           r.ImageURL,
+				"myDescription":      r.Description,
+				"restaurant_address": r.Address,
+				"restaurant_award":   award,
+				"OPEN_IN_URL":        openInURL,
 			},
 		}
 
-		// Add icon for bib gourmand
-		if r.CurrentAward != nil && strings.Contains(strings.ToLower(*r.CurrentAward), "bib gourmand") {
-			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+		// Add icon based on award type
+		if r.CurrentAward != nil {
+			awardLower := strings.ToLower(*r.CurrentAward)
+			if strings.Contains(awardLower, "bib gourmand") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/bibg.png",
+				}
+			} else if strings.Contains(awardLower, "selected restaurant") {
+				item.Icon = map[string]string{
+					"path": "../source/icons/star.png",
+				}
 			}
 		}
 
@@ -1089,61 +1332,6 @@ func showNoResults(message string) {
 	}
 	result := AlfredResult{Items: items}
 	printJSON(result)
-}
-
-// getOpenInURL returns the appropriate URL based on OPEN_IN preference
-func getOpenInURL(restaurant db.Restaurant) string {
-	openIn := os.Getenv("OPEN_IN")
-	if openIn == "" {
-		openIn = "restaurant" // Default to restaurant website
-	}
-
-	switch openIn {
-	case "restaurant":
-		if restaurant.WebsiteUrl != nil && *restaurant.WebsiteUrl != "" {
-			return *restaurant.WebsiteUrl
-		}
-	case "michelin":
-		if restaurant.Url != nil && *restaurant.Url != "" {
-			return *restaurant.Url
-		}
-	case "maps":
-		if restaurant.Latitude != nil && restaurant.Longitude != nil &&
-			*restaurant.Latitude != "" && *restaurant.Longitude != "" {
-			// Use restaurant name with coordinates for better identification
-			restaurantName := "Restaurant"
-			if restaurant.Name != nil && *restaurant.Name != "" {
-				restaurantName = *restaurant.Name
-			}
-			return fmt.Sprintf("https://www.google.com/maps?q=%s&ll=%s,%s",
-				strings.ReplaceAll(restaurantName, " ", "+"),
-				*restaurant.Latitude, *restaurant.Longitude)
-		}
-	case "apple_maps":
-		if restaurant.Latitude != nil && restaurant.Longitude != nil &&
-			*restaurant.Latitude != "" && *restaurant.Longitude != "" {
-			// Use restaurant name as query with coordinates for better identification
-			restaurantName := "Restaurant"
-			if restaurant.Name != nil && *restaurant.Name != "" {
-				restaurantName = *restaurant.Name
-			}
-			return fmt.Sprintf("maps://?q=%s&ll=%s,%s",
-				strings.ReplaceAll(restaurantName, " ", "+"),
-				*restaurant.Latitude, *restaurant.Longitude)
-		}
-	}
-
-	// Fallback to restaurant website if preferred option not available
-	if restaurant.WebsiteUrl != nil && *restaurant.WebsiteUrl != "" {
-		return *restaurant.WebsiteUrl
-	}
-
-	// Fallback to Michelin Guide if no website
-	if restaurant.Url != nil && *restaurant.Url != "" {
-		return *restaurant.Url
-	}
-
-	return ""
 }
 
 // handleAwardHistory shows the award history for a restaurant
@@ -1196,7 +1384,7 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 
 		item := AlfredItem{
 			Title:    fmt.Sprintf("%d: %s", award.Year, formattedAward),
-			Subtitle: fmt.Sprintf("%s | Year %d | CMD+ALT to go back", counter, award.Year),
+			Subtitle: fmt.Sprintf("%s | Year %d ", counter, award.Year),
 			Arg:      "",
 			Valid:    true,
 			Variables: map[string]interface{}{
@@ -1206,10 +1394,15 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 			},
 		}
 
-		// Add icon for bib gourmand
-		if strings.Contains(strings.ToLower(award.Distinction), "bib gourmand") {
+		// Add icon based on award type
+		awardLower := strings.ToLower(award.Distinction)
+		if strings.Contains(awardLower, "bib gourmand") {
 			item.Icon = map[string]string{
 				"path": "../source/icons/bibg.png",
+			}
+		} else if strings.Contains(awardLower, "selected restaurant") {
+			item.Icon = map[string]string{
+				"path": "../source/icons/star.png",
 			}
 		}
 
@@ -1319,32 +1512,265 @@ func formatAwardWithYearRange(award *string, firstYear *int, lastYear *int, gree
 	return formattedAward
 }
 
-// handleUpdateDatabase handles the database update command
-func handleUpdateDatabase(dbPath string) {
-	fmt.Fprintf(os.Stderr, "[DEBUG] Starting database update process\n")
-	fmt.Fprintf(os.Stderr, "[DEBUG] Current database path: %s\n", dbPath)
+// handleShowDescription handles the showDescription command
+func handleShowDescription(workDir string) {
+	// Step 1: Retrieve environmental variables
+	myDescription := os.Getenv("myDescription")
+	imageURL := os.Getenv("imageURL")
+	restaurantAddress := os.Getenv("restaurant_address")
+	restaurantAward := os.Getenv("restaurant_award")
 
-	err := db.UpdateDatabase(dbPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Database update failed: %v\n", err)
-		showError(fmt.Sprintf("Database update failed: %v", err))
+	// Step 2: Handle null/empty values
+	if myDescription == "" {
+		myDescription = "No description available"
+	}
+	if restaurantAddress == "" {
+		restaurantAddress = "No address available"
+	}
+	if restaurantAward == "" {
+		restaurantAward = "No award information available"
+	}
+
+	if imageURL == "" {
+		// If no image URL, create JSON with "No image available" message
+		restaurantName := os.Getenv("restaurant_name")
+		restaurantID := os.Getenv("restaurant_id")
+
+		// Get the restaurant URLs from environment variables
+		restaurantURL := os.Getenv("restaurant_url")
+		websiteURL := os.Getenv("website_url")
+
+		// Create URL links if available
+		urlLinks := ""
+		if websiteURL != "" || restaurantURL != "" {
+			urlLinks = "\n\n"
+			if websiteURL != "" {
+				urlLinks += fmt.Sprintf("🔗 %s", websiteURL)
+			}
+			if restaurantURL != "" {
+				if websiteURL != "" {
+					urlLinks += "\n\n"
+				}
+				urlLinks += fmt.Sprintf("🌟 %s", restaurantURL)
+			}
+		}
+
+		// Build the response content
+		responseContent := fmt.Sprintf("%s\n\nNo image available\n\n🏆 %s\n\n%s\n\n📍 %s",
+			restaurantName, restaurantAward, myDescription, restaurantAddress)
+
+		if urlLinks != "" {
+			responseContent += urlLinks
+		}
+
+		// Create the response struct
+		response := DescriptionResponse{
+			Variables: make(map[string]interface{}),
+			Response:  responseContent,
+			Footer:    restaurantID,
+		}
+		response.Behaviour.Response = "append"
+		response.Behaviour.Scroll = "end"
+		response.Behaviour.Inputfield = "select"
+
+		// Marshal to JSON
+		jsonBytes, err := json.MarshalIndent(response, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+			showError(fmt.Sprintf("Failed to marshal JSON: %v", err))
+			return
+		}
+
+		// Output the JSON
+		fmt.Println(string(jsonBytes))
 		return
 	}
 
-	// Show success message
-	result := AlfredResult{
-		Items: []AlfredItem{
-			{
-				Title:    "✅ Database Update Completed",
-				Subtitle: "Your Michelin database has been successfully updated with the latest data",
-				Valid:    false,
-			},
-		},
+	// Step 3: Extract filename from imageURL and check if it exists
+	filename := extractFilenameFromURL(imageURL)
+	if filename == "" {
+		showError("Could not extract filename from image URL")
+		return
 	}
 
-	if err := printJSON(result); err != nil {
-		showError(fmt.Sprintf("Error formatting update result: %v", err))
+	// Create images folder if it doesn't exist
+	imagesDir := filepath.Join(workDir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to create images directory: %v\n", err)
+		showError(fmt.Sprintf("Failed to create images directory: %v", err))
+		return
 	}
+
+	// Step 4: Check if file exists
+	imagePath := filepath.Join(imagesDir, filename)
+	fileExists := false
+	if _, err := os.Stat(imagePath); err == nil {
+		fileExists = true
+	}
+
+	// Step 5: If file doesn't exist, fetch and save it
+	if !fileExists {
+		if err := downloadImage(imageURL, imagePath); err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to download image: %v\n", err)
+			// If download fails, still show description with "No image available" message
+			restaurantName := os.Getenv("restaurant_name")
+			restaurantID := os.Getenv("restaurant_id")
+
+			// Get the restaurant URLs from environment variables
+			restaurantURL := os.Getenv("restaurant_url")
+			websiteURL := os.Getenv("website_url")
+
+			// Create URL links if available
+			urlLinks := ""
+			if websiteURL != "" || restaurantURL != "" {
+				urlLinks = "\n\n"
+				if websiteURL != "" {
+					urlLinks += fmt.Sprintf("🔗 %s", websiteURL)
+				}
+				if restaurantURL != "" {
+					if websiteURL != "" {
+						urlLinks += "\n\n"
+					}
+					urlLinks += fmt.Sprintf("🌟 %s", restaurantURL)
+				}
+			}
+
+			// Build the response content
+			responseContent := fmt.Sprintf("%s\n\nNo image available\n\n🏆 %s\n\n%s\n\n📍 %s",
+				restaurantName, restaurantAward, myDescription, restaurantAddress)
+
+			if urlLinks != "" {
+				responseContent += urlLinks
+			}
+
+			// Create the response struct
+			response := DescriptionResponse{
+				Variables: make(map[string]interface{}),
+				Response:  responseContent,
+				Footer:    restaurantID,
+			}
+			response.Behaviour.Response = "append"
+			response.Behaviour.Scroll = "end"
+			response.Behaviour.Inputfield = "select"
+
+			// Marshal to JSON
+			jsonBytes, err := json.MarshalIndent(response, "", "  ")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+				showError(fmt.Sprintf("Failed to marshal JSON: %v", err))
+				return
+			}
+
+			// Output the JSON
+			fmt.Println(string(jsonBytes))
+			return
+		}
+	}
+
+	// Step 6: Create and output JSON using proper marshaling
+	restaurantName := os.Getenv("restaurant_name")
+	restaurantID := os.Getenv("restaurant_id")
+
+	// Get the restaurant URLs from environment variables
+	restaurantURL := os.Getenv("restaurant_url")
+	websiteURL := os.Getenv("website_url")
+
+	// Create URL links if available
+	urlLinks := ""
+	if websiteURL != "" || restaurantURL != "" {
+		urlLinks = "\n\n"
+		if websiteURL != "" {
+			urlLinks += fmt.Sprintf("🔗 %s", websiteURL)
+		}
+		if restaurantURL != "" {
+			if websiteURL != "" {
+				urlLinks += "\n\n"
+			}
+			urlLinks += fmt.Sprintf("🌟 %s", restaurantURL)
+		}
+	}
+
+	// Build the response content
+	responseContent := fmt.Sprintf("%s\n\n![](%s)\n\n🏆 %s\n\n%s\n\n📍 %s",
+		restaurantName, imagePath, restaurantAward, myDescription, restaurantAddress)
+
+	if urlLinks != "" {
+		responseContent += urlLinks
+	}
+
+	// Create the response struct
+	response := DescriptionResponse{
+		Variables: make(map[string]interface{}),
+		Response:  responseContent,
+		Footer:    restaurantID,
+	}
+	response.Behaviour.Response = "append"
+	response.Behaviour.Scroll = "end"
+	response.Behaviour.Inputfield = "select"
+
+	// Marshal to JSON
+	jsonBytes, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+		showError(fmt.Sprintf("Failed to marshal JSON: %v", err))
+		return
+	}
+
+	// Output the JSON
+	fmt.Println(string(jsonBytes))
+}
+
+// extractFilenameFromURL extracts the filename from a URL
+func extractFilenameFromURL(url string) string {
+	// Split by '/' and get the last part
+	parts := strings.Split(url, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	filename := parts[len(parts)-1]
+
+	// Remove query parameters if present
+	if idx := strings.Index(filename, "?"); idx != -1 {
+		filename = filename[:idx]
+	}
+
+	return filename
+}
+
+// downloadImage downloads an image from a URL and saves it to the specified path
+func downloadImage(url, filepath string) error {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Make HTTP request
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to make HTTP request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if response is successful
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP request failed with status: %d", resp.StatusCode)
+	}
+
+	// Create the file
+	file, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// Copy the response body to the file
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to copy response body to file: %v", err)
+	}
+
+	return nil
 }
 
 // printJSON marshals and prints JSON to stdout
@@ -1355,4 +1781,192 @@ func printJSON(result AlfredResult) error {
 	}
 	fmt.Println(string(jsonBytes))
 	return nil
+}
+
+// extractZipFile extracts a zip file containing a database to the specified path
+func extractZipFile(zipPath, extractPath string) error {
+	// Open zip file
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	// Find the database file in the zip
+	var dbFile *zip.File
+	for _, f := range r.File {
+		if strings.HasSuffix(f.Name, ".db") {
+			dbFile = f
+			break
+		}
+	}
+
+	if dbFile == nil {
+		return fmt.Errorf("no .db file found in zip archive")
+	}
+
+	// Extract the database file
+	rc, err := dbFile.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	outFile, err := os.OpenFile(extractPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, dbFile.Mode())
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, rc)
+	return err
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+// preserveUserData copies user-generated tables from old database to new database
+func preserveUserData(oldDbPath, newDbPath string) error {
+	// Open old database
+	oldDb, err := sql.Open("sqlite3", oldDbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open old database: %v", err)
+	}
+	defer oldDb.Close()
+
+	// Open new database
+	newDb, err := sql.Open("sqlite3", newDbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open new database: %v", err)
+	}
+	defer newDb.Close()
+
+	// Check if user tables exist in old database
+	var userFavoritesExist, userVisitsExist bool
+
+	// Check for user_favorites table
+	rows, err := oldDb.Query("SELECT name FROM sqlite_master WHERE type='table' AND name='user_favorites'")
+	if err != nil {
+		return fmt.Errorf("failed to check for user_favorites table: %v", err)
+	}
+	userFavoritesExist = rows.Next()
+	rows.Close()
+
+	// Check for user_visits table
+	rows, err = oldDb.Query("SELECT name FROM sqlite_master WHERE type='table' AND name='user_visits'")
+	if err != nil {
+		return fmt.Errorf("failed to check for user_visits table: %v", err)
+	}
+	userVisitsExist = rows.Next()
+	rows.Close()
+
+	if !userFavoritesExist && !userVisitsExist {
+		// No user data to preserve
+		return nil
+	}
+
+	// Create user tables in new database if they don't exist
+	_, err = newDb.Exec(`
+		CREATE TABLE IF NOT EXISTS user_favorites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			restaurant_id INTEGER NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (restaurant_id) REFERENCES restaurants(id),
+			UNIQUE (restaurant_id)
+		);
+		
+		CREATE TABLE IF NOT EXISTS user_visits (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			restaurant_id INTEGER NOT NULL,
+			visited_date TEXT,
+			notes TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (restaurant_id) REFERENCES restaurants(id),
+			UNIQUE (restaurant_id)
+		);
+		
+		CREATE INDEX IF NOT EXISTS idx_user_favorites_restaurant ON user_favorites(restaurant_id);
+		CREATE INDEX IF NOT EXISTS idx_user_visits_restaurant ON user_visits(restaurant_id);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create user tables in new database: %v", err)
+	}
+
+	// Copy user_favorites if it exists
+	if userFavoritesExist {
+		rows, err := oldDb.Query("SELECT restaurant_id, created_at FROM user_favorites")
+		if err != nil {
+			return fmt.Errorf("failed to query user_favorites from old database: %v", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var restaurantID int64
+			var createdAt string
+			if err := rows.Scan(&restaurantID, &createdAt); err != nil {
+				return fmt.Errorf("failed to scan user_favorites row: %v", err)
+			}
+
+			// Insert into new database
+			_, err := newDb.Exec("INSERT OR IGNORE INTO user_favorites (restaurant_id, created_at) VALUES (?, ?)", restaurantID, createdAt)
+			if err != nil {
+				return fmt.Errorf("failed to insert user_favorites into new database: %v", err)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "[DEBUG] Copied user_favorites table\n")
+	}
+
+	// Copy user_visits if it exists
+	if userVisitsExist {
+		rows, err := oldDb.Query("SELECT restaurant_id, visited_date, notes, created_at FROM user_visits")
+		if err != nil {
+			return fmt.Errorf("failed to query user_visits from old database: %v", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var restaurantID int64
+			var visitedDate, notes, createdAt sql.NullString
+			if err := rows.Scan(&restaurantID, &visitedDate, &notes, &createdAt); err != nil {
+				return fmt.Errorf("failed to scan user_visits row: %v", err)
+			}
+
+			// Insert into new database
+			_, err := newDb.Exec("INSERT OR IGNORE INTO user_visits (restaurant_id, visited_date, notes, created_at) VALUES (?, ?, ?, ?)",
+				restaurantID, visitedDate, notes, createdAt)
+			if err != nil {
+				return fmt.Errorf("failed to insert user_visits into new database: %v", err)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "[DEBUG] Copied user_visits table\n")
+	}
+
+	return nil
+}
+
+// DescriptionResponse represents the JSON response for showDescription
+type DescriptionResponse struct {
+	Variables map[string]interface{} `json:"variables"`
+	Response  string                 `json:"response"`
+	Footer    string                 `json:"footer"`
+	Behaviour struct {
+		Response   string `json:"response"`
+		Scroll     string `json:"scroll"`
+		Inputfield string `json:"inputfield"`
+	} `json:"behaviour"`
 }

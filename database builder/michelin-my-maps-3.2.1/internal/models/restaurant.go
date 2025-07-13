@@ -22,7 +22,8 @@ type Restaurant struct {
 	PhoneNumber           string
 	FacilitiesAndServices string // Comma-separated string
 	WebsiteURL            string
-	InGuide               bool // Whether restaurant is currently in the guide
+	ImageURL              string // URL to the restaurant's main image
+	InGuide               bool   // Whether restaurant is currently in the guide
 
 	// Relationship
 	Awards []RestaurantAward `gorm:"foreignKey:RestaurantID"`
