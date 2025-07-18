@@ -578,18 +578,18 @@ func handleSearch(database *sql.DB, query string) {
 		if r.InGuide == 0 {
 			// Restaurant no longer in guide - show black star
 			item.Icon = map[string]string{
-				"path": "../source/icons/blackStar.png",
+				"path": "icons/blackStar.png",
 			}
 		} else if r.CurrentAward != nil {
 			// Restaurant in guide - show award-based icon
 			awardLower := strings.ToLower(*r.CurrentAward)
 			if strings.Contains(awardLower, "bib gourmand") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/bibg.png",
+					"path": "icons/bibg.png",
 				}
 			} else if strings.Contains(awardLower, "selected restaurant") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/star.png",
+					"path": "icons/star.png",
 				}
 			}
 		}
@@ -734,11 +734,11 @@ func handleSearchFavorites(database *sql.DB, query string) {
 			awardLower := strings.ToLower(*r.CurrentAward)
 			if strings.Contains(awardLower, "bib gourmand") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/bibg.png",
+					"path": "icons/bibg.png",
 				}
 			} else if strings.Contains(awardLower, "selected restaurant") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/star.png",
+					"path": "icons/star.png",
 				}
 			}
 		}
@@ -891,11 +891,11 @@ func handleSearchVisited(database *sql.DB, query string) {
 			awardLower := strings.ToLower(*r.CurrentAward)
 			if strings.Contains(awardLower, "bib gourmand") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/bibg.png",
+					"path": "icons/bibg.png",
 				}
 			} else if strings.Contains(awardLower, "selected restaurant") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/star.png",
+					"path": "icons/star.png",
 				}
 			}
 		}
@@ -1089,11 +1089,11 @@ func handleFavorites(database *sql.DB) {
 			awardLower := strings.ToLower(*r.CurrentAward)
 			if strings.Contains(awardLower, "bib gourmand") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/bibg.png",
+					"path": "icons/bibg.png",
 				}
 			} else if strings.Contains(awardLower, "selected restaurant") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/star.png",
+					"path": "icons/star.png",
 				}
 			}
 		}
@@ -1239,11 +1239,11 @@ func handleVisited(database *sql.DB) {
 			awardLower := strings.ToLower(*r.CurrentAward)
 			if strings.Contains(awardLower, "bib gourmand") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/bibg.png",
+					"path": "icons/bibg.png",
 				}
 			} else if strings.Contains(awardLower, "selected restaurant") {
 				item.Icon = map[string]string{
-					"path": "../source/icons/star.png",
+					"path": "icons/star.png",
 				}
 			}
 		}
@@ -1351,11 +1351,11 @@ func handleAwardHistory(database *sql.DB, id int64, searchQuery string) {
 		awardLower := strings.ToLower(award.Distinction)
 		if strings.Contains(awardLower, "bib gourmand") {
 			item.Icon = map[string]string{
-				"path": "../source/icons/bibg.png",
+				"path": "icons/bibg.png",
 			}
 		} else if strings.Contains(awardLower, "selected restaurant") {
 			item.Icon = map[string]string{
-				"path": "../source/icons/star.png",
+				"path": "icons/star.png",
 			}
 		}
 
