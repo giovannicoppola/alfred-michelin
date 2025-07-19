@@ -1,4 +1,4 @@
-# Alfred Michelin Restaurant Guide ✨️
+# Michelin Restaurants ✨️
 An Alfred workflow to search, favorite, and track your visits to 20,000+ Michelin guide restaurants around the world.\
 Feeling fancy? 🎩 Find your next Michelin-starred restaurant with Alfred. 🌟
 
