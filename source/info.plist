@@ -950,18 +950,18 @@ Feeling fancy? 🎩 Find your next Michelin-starred restaurant with Alfred. ✨
 
 ## Usage
 
-- `!mm [query]` - Search for Michelin restaurants by name, location, cuisine, or distinction
-- `!mf` - View all your favorite restaurants
-- `!mf [query]` - Search within your favorite restaurants
-- `!mv` - View all restaurants you've visited
-- `!mv [query]` - Search within your visited restaurants
+- `!mm [query]` - Search for Michelin restaurants by name, location, cuisine, or distinction. Search is case-sensitive when it includes uppercase letters. Awards can be searched via `3s`, `2s`, `1s`, `bib`, `gs`, or `sr` keywords.
+- `!mf` List and search all your favorite restaurants
+- `!mv` List and search all your visited restaurants
+
 
 Once a restaurant is identified: 
 
-- `CTRL`: **❤️Favorite**: Toggle restaurant favorite status
-- `ALT`: **✅️Visited**: Toggle restaurant visited status
-- `CMD`: **🏆️Awards**: View award history for restaurant (CMD+ALT: back)
-- `SHIFT`: **ℹ️More details**</string>
+- &lt;kbd&gt;↩️&lt;/kbd&gt; open restaurant website according to the preference specified in the Workflow's configuration.
+- &lt;kbd&gt;^&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ❤️ add or remove from favorites.
+- &lt;kbd&gt;⌥&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ✅️ add or remove from visited.
+- &lt;kbd&gt;⌘&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; 🏆️ view award history (&lt;kbd&gt;⌘&lt;/kbd&gt;&lt;kbd&gt;⌥&lt;/kbd&gt;: back).
+- &lt;kbd&gt;⇧&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ℹ️ show more details.</string>
 	<key>uidata</key>
 	<dict>
 		<key>05B542ED-454F-451D-B50B-29B004FC946B</key>
@@ -1288,7 +1288,7 @@ Once a restaurant is identified:
 	<key>variablesdontexport</key>
 	<array/>
 	<key>version</key>
-	<string>0.1.2</string>
+	<string>0.1.3</string>
 	<key>webaddress</key>
 	<string>https://github.com/giovannicoppola/alfred-michelin</string>
 </dict>
