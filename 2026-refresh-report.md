@@ -227,7 +227,41 @@ canonical form:
 
 This trimmed the distinct-country count from 57 to 53.
 
-### Housekeeping
+## Image URL backfill
+
+The image scraper is a separate `images-batch` subcommand (not part of
+the main `scrape` pass), so the 2026 refresh left `image_url` empty on
+every newly-scraped restaurant. 2,438 in-guide restaurants were
+missing images by the end of the main pass, plus 1,296 delisted
+restaurants that had never been image-scraped.
+
+A single `./mym images-batch` run (no `-retry-failed`) was executed
+after the green-star fix was merged. It processes each restaurant
+serially, sleeps 2s between requests, and uses a standalone
+`net/http` client (no colly cache). Wall time ≈ 2h 15m for 3,734
+URLs.
+
+Results:
+
+| Bucket | Before | After | Δ |
+| --- | ---: | ---: | ---: |
+| In-guide with image | 18,103 | 20,541 | **+2,438** |
+| In-guide missing image | 2,484 | 46 | **−2,438** |
+| Delisted with image | 119 | 174 | +55 |
+| Delisted 404s | 1,515 | 2,756 | +1,241 |
+
+In-guide image coverage is now **99.78%** (20,541 / 20,587); the 46
+remaining failures are pre-existing carry-overs, likely flaky pages.
+The +1,241 new "failed" entries on delisted restaurants are 404s —
+Michelin removed those pages entirely.
+
+Minor known issue: GORM's `OnConflict` clause in
+`storage.SaveRestaurant` uses the loaded-into-struct value of
+`updated_at` rather than `CURRENT_TIMESTAMP`, so image-batch writes
+don't bump the row's timestamp. Image URLs themselves land correctly;
+just the audit timestamp doesn't reflect the update.
+
+## Housekeeping
 
 Additional cleanup folded into this branch during 0.2 packaging:
 

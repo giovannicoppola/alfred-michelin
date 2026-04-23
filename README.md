@@ -116,6 +116,9 @@ This workflow uses data from the Michelin Guide [dataset](https://www.kaggle.com
 
 ## What's new in version 0.2
 
+### 🖼️ Image coverage restored
+Image scraping is a separate pass from the main scrape, and wasn't re-run after the 2026 refresh — so 2,438 in-guide restaurants (mostly 2026 newcomers) were shipping without images in 0.2 pre-release. A post-run `images-batch` pass closed that gap: **in-guide image coverage is now 99.78%** (20,541 of 20,587).
+
 ### 🗓️ Refreshed with the 2026 Michelin guide
 
 How the bundled database changed between version 0.1 (July 2025 snapshot) and 0.2 (April 2026 snapshot):
