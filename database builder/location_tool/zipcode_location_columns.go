@@ -72,6 +72,29 @@ func init() {
 	zipCodeRanges["NY"] = append(zipCodeRanges["NY"], 10000, 14999) // New York has multiple ranges
 }
 
+// cityToCountry maps single-token locations (city-states, or cities Michelin
+// lists without the country suffix) to their country. Michelin's location
+// field is usually "City, Country" — but for Dubai, Singapore, Macau etc. it
+// is just the city. Without this table those rows end up with an empty
+// country field.
+var cityToCountry = map[string]string{
+	"dubai":            "UAE",
+	"abu dhabi":        "UAE",
+	"macau":            "Macau",
+	"singapore":        "Singapore",
+	"hong kong":        "Hong Kong",
+	"tokyo":            "Japan",
+	"osaka":            "Japan",
+	"kyoto":            "Japan",
+	"seoul":            "South Korea",
+	"bangkok":          "Thailand",
+	"manila":           "Philippines",
+	"jakarta":          "Indonesia",
+	"kuala lumpur":     "Malaysia",
+	"ho chi minh city": "Vietnam",
+	"hanoi":            "Vietnam",
+}
+
 // getStateFromZIP returns the state abbreviation for a given ZIP code
 func getStateFromZIP(zipStr string) string {
 	// Clean the ZIP code
@@ -108,32 +131,103 @@ func extractCountryAndState(address, location string) (string, string) {
 	address = strings.ToLower(address)
 	location = strings.ToLower(location)
 
-	// Check if it's in the USA
-	isUSA := strings.Contains(address, "usa") || strings.Contains(location, "usa")
+	// Country is Michelin's final comma-separated segment. A plain substring
+	// scan would false-positive on tokens like "Kusagawacho" (Kyoto) which
+	// contain "usa" mid-word, so only treat a restaurant as US when the last
+	// segment of either location or address matches a recognized US token.
+	// Michelin uses both "USA" and "United States" across the dataset.
+	lastSegment := func(s string) string {
+		parts := strings.Split(s, ",")
+		return strings.TrimSpace(parts[len(parts)-1])
+	}
+	isUSToken := func(s string) bool {
+		return s == "usa" || s == "united states" || s == "united states of america"
+	}
+	isUSA := isUSToken(lastSegment(address)) || isUSToken(lastSegment(location))
 
 	if !isUSA {
-		// For non-US addresses, extract country from location
-		// Location format is typically "City, Country"
-		parts := strings.Split(location, ",")
-		if len(parts) >= 2 {
-			country := strings.TrimSpace(parts[len(parts)-1])
-			// Capitalize first letter
-			if len(country) > 0 {
-				country = strings.ToUpper(country[:1]) + country[1:]
+		// For non-US addresses, extract country from location.
+		// Location format is typically "City, Country", but Michelin uses a
+		// bare city name for city-states (Dubai, Singapore, Macau, Hong Kong)
+		// and other single-city locations (Paris, Luxembourg, London). When
+		// the location is a single token, fall back to the address's last
+		// comma-separated segment, which Michelin always fills with the
+		// country.
+		// capitalize title-cases a country string that was lowercased upstream.
+		// A naive "uppercase first letter only" approach produced values like
+		// "United kingdom" / "South korea" in 2025 — per-word casing keeps the
+		// report and search surfaces readable.
+		abbrev := map[string]string{
+			"usa": "USA", "uae": "UAE", "uk": "UK",
+			"sar": "SAR", // Hong Kong SAR, Macau SAR
+		}
+		capitalize := func(s string) string {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				return s
 			}
+			if v, ok := abbrev[strings.ToLower(s)]; ok {
+				return v
+			}
+			words := strings.Fields(s)
+			for i, w := range words {
+				lw := strings.ToLower(w)
+				if up, ok := abbrev[lw]; ok {
+					words[i] = up
+					continue
+				}
+				// Preserve connector words ("of", "and", "&") in lowercase
+				// except at the start of the phrase.
+				if i > 0 && (lw == "of" || lw == "and" || lw == "the") {
+					words[i] = lw
+					continue
+				}
+				if len(w) > 0 {
+					words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+				}
+			}
+			return strings.Join(words, " ")
+		}
+		locTrimmed := strings.TrimSpace(location)
+		if country, ok := cityToCountry[locTrimmed]; ok {
 			return country, ""
+		}
+		if parts := strings.Split(location, ","); len(parts) >= 2 {
+			return capitalize(strings.TrimSpace(parts[len(parts)-1])), ""
+		}
+		if parts := strings.Split(address, ","); len(parts) >= 2 {
+			country := strings.TrimSpace(parts[len(parts)-1])
+			if country != "" {
+				return capitalize(country), ""
+			}
 		}
 		return "", ""
 	}
 
-	// For US addresses, extract state from ZIP code in address
-	// Address format is typically "Street, City, ZIP, USA"
+	// For US addresses, the format may be either
+	//   "Street, City, ZIP, USA"            (older Michelin layout)
+	//   "Street, City, ST, ZIP, USA"        (current Michelin layout — state included)
+	// Walk the comma-separated parts in order: prefer an explicit state
+	// abbreviation when Michelin gives us one, fall back to deriving the
+	// state from a 5-digit ZIP code found anywhere in the address.
 	addressParts := strings.Split(address, ",")
-	if len(addressParts) >= 3 {
-		// The ZIP code is usually the third part
-		zipPart := strings.TrimSpace(addressParts[2])
-		state := getStateFromZIP(zipPart)
-		if state != "" {
+
+	for _, part := range addressParts {
+		token := strings.ToUpper(strings.TrimSpace(part))
+		if len(token) == 2 {
+			if _, ok := zipCodeRanges[token]; ok {
+				return "USA", token
+			}
+		}
+	}
+
+	zipOnly := regexp.MustCompile(`^\d{5}(-\d{4})?$`)
+	for _, part := range addressParts {
+		token := strings.TrimSpace(part)
+		if !zipOnly.MatchString(token) {
+			continue
+		}
+		if state := getStateFromZIP(token); state != "" {
 			return "USA", state
 		}
 	}

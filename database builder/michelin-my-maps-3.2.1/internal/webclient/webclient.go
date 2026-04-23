@@ -81,16 +81,12 @@ func New(cfg *Config) (*WebClient, error) {
 		colly.AllowedDomains(cfg.AllowedDomains...),
 	)
 
-	c.Limit(&colly.LimitRule{
-		Delay:       cfg.Delay,
-		RandomDelay: cfg.RandomDelay,
-	})
+	if err := applyLimit(c, cfg); err != nil {
+		return nil, err
+	}
 
 	// Setup realistic headers instead of default extensions
 	setupRealisticHeaders(c)
-
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
 
 	q, err := queue.New(
 		cfg.ThreadCount,
@@ -107,6 +103,23 @@ func New(cfg *Config) (*WebClient, error) {
 	}, nil
 }
 
+// applyLimit installs a rate-limit rule against the allowed domain(s). A
+// LimitRule with neither DomainGlob nor DomainRegexp set compiles to a no-op —
+// historically the scraper's configured 4-8s delay was never enforced, which
+// is what triggered the AWS WAF challenge after a burst of requests.
+func applyLimit(c *colly.Collector, cfg *Config) error {
+	glob := "*"
+	if len(cfg.AllowedDomains) > 0 {
+		glob = "*" + cfg.AllowedDomains[0] + "*"
+	}
+	return c.Limit(&colly.LimitRule{
+		DomainGlob:  glob,
+		Delay:       cfg.Delay,
+		RandomDelay: cfg.RandomDelay,
+		Parallelism: cfg.ThreadCount,
+	})
+}
+
 // GetQueue returns the queue for managing URLs.
 func (w *WebClient) GetQueue() *queue.Queue {
 	return w.queue
@@ -118,10 +131,18 @@ func (w *WebClient) GetCollector() *colly.Collector {
 }
 
 // CreateDetailCollector creates a cloned collector for detail page scraping.
+// Clone() does not copy limit rules, so we re-apply them here — otherwise the
+// detail collector would fire requests as fast as the network allows and
+// trip the origin's WAF.
 func (w *WebClient) CreateDetailCollector() *colly.Collector {
 	dc := w.collector.Clone()
 
-	// Setup realistic headers for detail collector too
+	if err := applyLimit(dc, w.config); err != nil {
+		// Should never happen at runtime (config is validated in New), but
+		// bubble up via log rather than panicking the scrape.
+		panic(err)
+	}
+
 	setupRealisticHeaders(dc)
 
 	return dc
@@ -129,8 +150,14 @@ func (w *WebClient) CreateDetailCollector() *colly.Collector {
 
 // ClearCache removes the cache file for a given colly.Request.
 func (w *WebClient) ClearCache(r *colly.Request) error {
-	url := r.URL.String()
-	sum := sha1.Sum([]byte(url))
+	return w.ClearCacheByURL(r.URL.String())
+}
+
+// ClearCacheByURL removes the cache file that colly would write for the given
+// raw URL. Matches colly's on-disk scheme (sha1 hex of the URL, first two
+// hex chars as subdir).
+func (w *WebClient) ClearCacheByURL(rawURL string) error {
+	sum := sha1.Sum([]byte(rawURL))
 	hash := hex.EncodeToString(sum[:])
 
 	cacheDir := path.Join(w.config.CachePath, hash[:2])
@@ -139,7 +166,6 @@ func (w *WebClient) ClearCache(r *colly.Request) error {
 	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-
 	return nil
 }
 

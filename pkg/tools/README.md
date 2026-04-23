@@ -2,14 +2,16 @@
 
 This directory contains utility scripts for maintaining the Alfred Michelin Workflow.
 
-## compare_csv_database.go
+Each tool lives in its own subdirectory so they can coexist as `package main` without colliding when the parent module is built with `go build ./...`.
+
+## compare_csv_database
 
 A Go script that performs a bidirectional comparison between the latest CSV export and the database to identify discrepancies.
 
 ### Usage
 
 ```bash
-go run compare_csv_database.go
+go run ./compare_csv_database
 ```
 
 ### What it does

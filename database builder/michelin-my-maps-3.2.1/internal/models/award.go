@@ -74,9 +74,11 @@ func (r *RestaurantAward) validate() error {
 	if !allowed[r.Distinction] {
 		return errors.New("distinction must be a valid value")
 	}
-	if strings.TrimSpace(r.Price) == "" {
-		return errors.New("price cannot be empty")
-	}
+	// Price may legitimately be empty for new or unlisted entries on
+	// guide.michelin.com. Accept empty so we don't drop otherwise-valid
+	// award rows (e.g. a newly promoted 3-star restaurant whose page has
+	// no price range yet). Callers that care about price should treat
+	// the empty string as "unknown" rather than assuming it's present.
 	currentYear := time.Now().Year()
 	if r.Year < 1900 || r.Year > currentYear+1 {
 		return errors.New("year must be between 1900 and next year")

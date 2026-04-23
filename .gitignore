@@ -3,3 +3,21 @@
 __pycache__
 prefs.plist
 lib
+
+# Compiled Go binaries
+pkg/alfred-michelin
+database builder/michelin-my-maps-3.2.1/mym
+database builder/location_tool/database-builder
+
+# Colly HTTP cache (regeneratable, ~gigabytes)
+database builder/michelin-my-maps-3.2.1/cache/
+
+# SQLite write-ahead log + shared memory files (only meaningful while DB is open)
+*.db-wal
+*.db-shm
+
+# Database backups kept locally for safety, not for distribution
+database builder/michelin-my-maps-3.2.1/data/michelin.db.pre-*
+
+# Per-machine Claude Code config
+.claude/

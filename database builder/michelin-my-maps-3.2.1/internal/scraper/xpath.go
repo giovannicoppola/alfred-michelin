@@ -18,7 +18,11 @@ const (
 	restaurantDistinctionXPath           = "//*[@class='data-sheet__classification-item--content'][2]"
 	restaurantFacilitiesAndServicesXPath = "//*[contains(@class, 'col col-12 col-lg-6')]//li"
 	restaurantGoogleMapsXPath            = "//*[@class='google-map__static']/iframe"
-	restaurantGreenStarXPath             = "//*[contains(text(),'MICHELIN Green Star')]"
+	// Michelin stopped rendering a "MICHELIN Green Star" text node server-side
+	// in the 2026 template rework. The signal now lives in a data-* attribute
+	// on the detail page's main action button; the attribute is present with
+	// value "true" only when the restaurant holds a green star.
+	restaurantGreenStarXPath = "//*[@data-green-star='true']"
 	restaurantNameXPath                  = "//*[@class='data-sheet__title']"
 	restaurantPhoneNumberXPath           = "//a[@data-event='CTA_tel']"
 	restaurantPriceAndCuisineXPath       = "//*[contains(@class, 'data-sheet__block--text')][2]"

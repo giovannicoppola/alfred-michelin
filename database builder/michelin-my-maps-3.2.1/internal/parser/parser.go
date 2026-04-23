@@ -110,9 +110,14 @@ func decodeHTMLEntities(s string) string {
 	return s
 }
 
-// ParseGreenStar parses the MICHELIN Green Star based on the input string.
-func ParseGreenStar(distinction string) bool {
-	return strings.ToLower(distinction) == "michelin green star"
+// ParseGreenStar returns true when the passed string signals a MICHELIN
+// Green Star distinction. It accepts both the pre-2026 text form
+// ("MICHELIN Green Star") and the post-2026 attribute form ("true"), which
+// keeps older code paths (backfill, historical) working unchanged while the
+// live scraper now reads data-green-star="true".
+func ParseGreenStar(value string) bool {
+	v := strings.TrimSpace(strings.ToLower(value))
+	return v == "michelin green star" || v == "true"
 }
 
 /*

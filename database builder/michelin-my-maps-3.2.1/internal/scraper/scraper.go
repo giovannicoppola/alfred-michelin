@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,12 @@ import (
 	"github.com/ngshiheng/michelin-my-maps/v3/internal/webclient"
 	log "github.com/sirupsen/logrus"
 )
+
+// MaxRetryPasses is the number of outer scrape passes. Each pass re-queues
+// URLs that failed permanently in the previous pass so that a single
+// invocation can recover from transient failures without requiring the user
+// to rerun the tool.
+const MaxRetryPasses = 5
 
 // Config holds configuration for the scraper process.
 type Config struct {
@@ -38,12 +46,12 @@ func DefaultConfig() *Config {
 		AllowedDomains: []string{"guide.michelin.com"},
 		CachePath:      "cache/scrape",
 		DatabasePath:   "data/michelin.db",
-		Delay:          4 * time.Second, // Increased from 2s to 4s
-		MaxRetry:       3,
+		Delay:          2 * time.Second,
+		MaxRetry:       5,
 		MaxURLs:        30_000,
-		MaxRestaurants: 0,               // No limit by default
-		RandomDelay:    4 * time.Second, // Increased from 2s to 4s (total 4-8s delay)
-		ThreadCount:    1,
+		MaxRestaurants: 0,
+		RandomDelay:    3 * time.Second, // total 2-5s delay
+		ThreadCount:    2,
 	}
 }
 
@@ -53,13 +61,23 @@ func ConservativeConfig() *Config {
 		AllowedDomains: []string{"guide.michelin.com"},
 		CachePath:      "cache/scrape",
 		DatabasePath:   "data/michelin.db",
-		Delay:          8 * time.Second, // Very conservative 8s base delay
-		MaxRetry:       3,
+		Delay:          8 * time.Second,
+		MaxRetry:       5,
 		MaxURLs:        30_000,
 		MaxRestaurants: 0,
-		RandomDelay:    8 * time.Second, // 8-16s total delay
+		RandomDelay:    8 * time.Second, // total 8-16s delay
 		ThreadCount:    1,
 	}
+}
+
+// failedRequest records a URL that exhausted its per-request retry budget so
+// an outer pass can re-attempt it.
+type failedRequest struct {
+	URL       string
+	IsListing bool              // true when the URL is a listing/pagination page
+	CtxData   map[string]string // preserved colly.Context values (location, lat, lng, ...)
+	LastErr   string
+	LastCode  int
 }
 
 // Scraper orchestrates the web scraping process.
@@ -70,7 +88,116 @@ type Scraper struct {
 	michelinURLs   []models.GuideURL
 	processedCount int
 	queuedCount    int // Track queued restaurant detail pages
+	failedRequests []failedRequest
 	mu             sync.Mutex
+}
+
+// preservedCtxKeys are the keys we round-trip when a request is retried in a
+// later pass. They carry the listing metadata a detail page handler expects.
+var preservedCtxKeys = []string{"location", "longitude", "latitude", "restaurant_id"}
+
+// recordFailure appends the URL that just exhausted its retries to
+// failedRequests so the outer retry loop can re-attempt it in the next pass.
+func (s *Scraper) recordFailure(r *colly.Request, isListing bool, statusCode int, err error) {
+	ctxData := make(map[string]string, len(preservedCtxKeys))
+	for _, k := range preservedCtxKeys {
+		if v := r.Ctx.Get(k); v != "" {
+			ctxData[k] = v
+		}
+	}
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	s.mu.Lock()
+	s.failedRequests = append(s.failedRequests, failedRequest{
+		URL:       r.URL.String(),
+		IsListing: isListing,
+		CtxData:   ctxData,
+		LastErr:   errStr,
+		LastCode:  statusCode,
+	})
+	s.mu.Unlock()
+}
+
+// takeFailures atomically extracts and clears the failed request list.
+func (s *Scraper) takeFailures() []failedRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.failedRequests
+	s.failedRequests = nil
+	return out
+}
+
+// wafChallengeMarkers are strings that uniquely identify the AWS WAF JS
+// interstitial the origin serves when it rate-limits the scraper. The
+// response status is 200 and the body is tiny (~2.5kB) with no real content,
+// so OnXML handlers silently find nothing — we have to detect it explicitly.
+var wafChallengeMarkers = [][]byte{
+	[]byte("awsWafCookieDomainList"),
+	[]byte("goku-sdk"),
+	[]byte("gokuProps"),
+}
+
+// checkWAFChallenge inspects a response; if it looks like a WAF challenge
+// page the URL is recorded as a failure (so the outer retry loop can retry
+// after a cooldown), its cache entry is invalidated, and the request is
+// aborted so downstream OnXML handlers don't process the empty body.
+func (s *Scraper) checkWAFChallenge(r *colly.Response, isListing bool) {
+	if r == nil || len(r.Body) == 0 || len(r.Body) > 10000 {
+		return
+	}
+	body := r.Body
+	hit := false
+	for _, m := range wafChallengeMarkers {
+		if bytesContains(body, m) {
+			hit = true
+			break
+		}
+	}
+	if !hit {
+		return
+	}
+	log.WithFields(log.Fields{
+		"url":         r.Request.URL.String(),
+		"status_code": r.StatusCode,
+		"body_size":   len(r.Body),
+		"listing":     isListing,
+	}).Warn("AWS WAF challenge page returned — deferring URL to next pass")
+
+	if cerr := s.client.ClearCache(r.Request); cerr != nil {
+		log.WithFields(log.Fields{"url": r.Request.URL.String(), "error": cerr}).Warn("failed to clear cache for WAF-challenged URL")
+	}
+	s.recordFailure(r.Request, isListing, r.StatusCode, errWAFChallenge)
+}
+
+// errWAFChallenge is the sentinel error recorded against URLs served a WAF
+// challenge page.
+var errWAFChallenge = &scraperError{msg: "AWS WAF challenge page"}
+
+type scraperError struct{ msg string }
+
+func (e *scraperError) Error() string { return e.msg }
+
+// bytesContains is a tiny substring search so we don't pull in "bytes" just
+// for Contains (keeps the diff minimal against the rest of the package).
+func bytesContains(haystack, needle []byte) bool {
+	if len(needle) == 0 {
+		return true
+	}
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		match := true
+		for j := 0; j < len(needle); j++ {
+			if haystack[i+j] != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // New returns a new Scraper with default settings.
@@ -170,21 +297,165 @@ func (s *Scraper) initURLs() {
 }
 
 // Run crawls Michelin Guide restaurant information from the configured URLs.
+//
+// Behaviour:
+//   - Pass 1 queues every distinction listing URL and walks pagination.
+//   - After each pass, URLs that exhausted their per-request retry budget are
+//     collected in s.failedRequests. Pass 2+ re-attempts only those (listing
+//     pages go back through pagination; detail pages are requested directly),
+//     using fresh colly collectors so the "already visited" set is clean.
+//   - Stops early when a pass has no failures. After MaxRetryPasses the
+//     unresolved URLs are written to data/failed_urls_<timestamp>.txt for
+//     visibility (or retry via `scrape -csv`).
 func (s *Scraper) Run(ctx context.Context) error {
-	queue := s.client.GetQueue()
-	collector := s.client.GetCollector()
-	detailCollector := s.client.CreateDetailCollector()
-
-	s.setupMainHandlers(ctx, collector, queue, detailCollector)
-	s.setupDetailHandlers(ctx, detailCollector, queue)
-
-	for _, url := range s.michelinURLs {
-		s.client.AddURL(url.URL)
+	// Pass 1: normal listing crawl.
+	if err := s.runListingPass(ctx, s.client.GetCollector(), s.client.GetQueue()); err != nil {
+		return err
 	}
 
-	s.client.Run()
-	log.Info("scraping completed")
+	for pass := 2; pass <= MaxRetryPasses; pass++ {
+		failed := s.takeFailures()
+		if len(failed) == 0 {
+			log.WithField("passes", pass-1).Info("scraping completed with no unresolved failures")
+			return nil
+		}
+
+		listing, detail := splitFailures(failed)
+		log.WithFields(log.Fields{
+			"pass":           pass,
+			"failed_listing": len(listing),
+			"failed_detail":  len(detail),
+		}).Info("retrying failed URLs in new pass")
+
+		// Brief cooldown before retry pass — gives the origin server (and any
+		// rate limiter) a chance to settle between bursts.
+		time.Sleep(15 * time.Second)
+
+		if err := s.runRetryPass(ctx, listing, detail); err != nil {
+			return err
+		}
+	}
+
+	// Any failures remaining after the final pass are persisted for visibility.
+	final := s.takeFailures()
+	if len(final) > 0 {
+		path, werr := s.writeFailureReport(final)
+		log.WithFields(log.Fields{
+			"remaining": len(final),
+			"report":    path,
+			"writeErr":  werr,
+		}).Warn("scraping completed with unresolved failures")
+	} else {
+		log.Info("scraping completed with no unresolved failures")
+	}
 	return nil
+}
+
+// runListingPass wires handlers onto the given collector/queue, seeds the
+// listing URLs, and runs the crawl synchronously.
+func (s *Scraper) runListingPass(ctx context.Context, collector *colly.Collector, q *queue.Queue) error {
+	detailCollector := s.client.CreateDetailCollector()
+
+	s.setupMainHandlers(ctx, collector, q, detailCollector)
+	s.setupDetailHandlers(ctx, detailCollector, q)
+
+	for _, url := range s.michelinURLs {
+		if err := q.AddURL(url.URL); err != nil {
+			return fmt.Errorf("failed to queue listing url %s: %w", url.URL, err)
+		}
+	}
+
+	return q.Run(collector)
+}
+
+// runRetryPass retries URLs that failed permanently in an earlier pass using
+// a fresh main collector / queue / detail collector (colly's "already
+// visited" set is per-collector, so a fresh one is required).
+func (s *Scraper) runRetryPass(ctx context.Context, listingFails, detailFails []failedRequest) error {
+	// Clone collectors for a clean slate on the visited set.
+	collector := s.client.GetCollector().Clone()
+	detailCollector := s.client.CreateDetailCollector()
+
+	// Fresh queue so re-added listing URLs aren't rejected as duplicates.
+	q, err := queue.New(1, &queue.InMemoryQueueStorage{MaxSize: s.config.MaxURLs})
+	if err != nil {
+		return fmt.Errorf("failed to create retry queue: %w", err)
+	}
+
+	s.setupMainHandlers(ctx, collector, q, detailCollector)
+	s.setupDetailHandlers(ctx, detailCollector, q)
+
+	// Clear any cached failed responses so retries hit the live site.
+	for _, f := range listingFails {
+		_ = s.clearCacheForURL(f.URL)
+	}
+	for _, f := range detailFails {
+		_ = s.clearCacheForURL(f.URL)
+	}
+
+	// Re-queue listing pages (walks pagination again and rediscovers details).
+	for _, f := range listingFails {
+		if err := q.AddURL(f.URL); err != nil {
+			log.WithFields(log.Fields{"url": f.URL, "error": err}).Warn("failed to re-queue listing URL")
+		}
+	}
+	if len(listingFails) > 0 {
+		if err := q.Run(collector); err != nil {
+			return fmt.Errorf("retry listing pass failed: %w", err)
+		}
+	}
+
+	// Retry failed detail URLs directly, restoring the context values the
+	// detail handler expects from the listing (location, lat, lng, ...).
+	for _, f := range detailFails {
+		reqCtx := colly.NewContext()
+		for k, v := range f.CtxData {
+			reqCtx.Put(k, v)
+		}
+		if err := detailCollector.Request("GET", f.URL, nil, reqCtx, nil); err != nil {
+			log.WithFields(log.Fields{"url": f.URL, "error": err}).Warn("failed to re-request detail URL")
+		}
+	}
+	return nil
+}
+
+// splitFailures partitions a failure list into listing and detail buckets.
+func splitFailures(fs []failedRequest) (listing, detail []failedRequest) {
+	for _, f := range fs {
+		if f.IsListing {
+			listing = append(listing, f)
+		} else {
+			detail = append(detail, f)
+		}
+	}
+	return
+}
+
+// clearCacheForURL removes the cached response for a URL so a retry hits the
+// live origin instead of replaying the 403/5xx that got cached on the first pass.
+func (s *Scraper) clearCacheForURL(rawURL string) error {
+	return s.client.ClearCacheByURL(rawURL)
+}
+
+// writeFailureReport writes permanently failed URLs to a timestamped file so
+// the user can inspect or feed them back in via the `-csv` mode.
+func (s *Scraper) writeFailureReport(failures []failedRequest) (string, error) {
+	dir := filepath.Dir(s.config.DatabasePath)
+	if dir == "" {
+		dir = "."
+	}
+	path := filepath.Join(dir, fmt.Sprintf("failed_urls_%s.txt", time.Now().UTC().Format("2006-01-02_15-04-05")))
+	f, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "# unresolved URLs after %d scrape passes (generated %s UTC)\n", MaxRetryPasses, time.Now().UTC().Format(time.RFC3339))
+	fmt.Fprintf(f, "# format: <is_listing>\t<status_code>\t<url>\t<last_error>\n")
+	for _, fr := range failures {
+		fmt.Fprintf(f, "%t\t%d\t%s\t%s\n", fr.IsListing, fr.LastCode, fr.URL, fr.LastErr)
+	}
+	return path, nil
 }
 
 // shouldProcessRestaurant determines if a restaurant should be processed for randomization
@@ -463,7 +734,7 @@ func (s *Scraper) setupCSVDetailHandlers(ctx context.Context, detailCollector *c
 		}
 	})
 
-	detailCollector.OnError(s.createErrorHandler())
+	detailCollector.OnError(s.createErrorHandler(false))
 }
 
 func (s *Scraper) setupMainHandlers(ctx context.Context, collector *colly.Collector, q *queue.Queue, detailCollector *colly.Collector) {
@@ -484,6 +755,7 @@ func (s *Scraper) setupMainHandlers(ctx context.Context, collector *colly.Collec
 			"url":         r.Request.URL.String(),
 			"status_code": r.StatusCode,
 		}).Debug("processing listing page")
+		s.checkWAFChallenge(r, true)
 	})
 
 	collector.OnScraped(func(r *colly.Response) {
@@ -545,7 +817,7 @@ func (s *Scraper) setupMainHandlers(ctx context.Context, collector *colly.Collec
 		e.Request.Visit(e.Attr("href"))
 	})
 
-	collector.OnError(s.createErrorHandler())
+	collector.OnError(s.createErrorHandler(true))
 }
 
 func (s *Scraper) setupDetailHandlers(ctx context.Context, detailCollector *colly.Collector, q *queue.Queue) {
@@ -560,6 +832,10 @@ func (s *Scraper) setupDetailHandlers(ctx context.Context, detailCollector *coll
 			"url":           r.URL.String(),
 			"restaurant_id": r.Ctx.Get("restaurant_id"),
 		}).Debug("fetching restaurant detail")
+	})
+
+	detailCollector.OnResponse(func(r *colly.Response) {
+		s.checkWAFChallenge(r, false)
 	})
 
 	detailCollector.OnXML(restaurantAwardPublishedYearXPath, func(e *colly.XMLElement) {
@@ -616,11 +892,15 @@ func (s *Scraper) setupDetailHandlers(ctx context.Context, detailCollector *coll
 		}
 	})
 
-	detailCollector.OnError(s.createErrorHandler())
+	detailCollector.OnError(s.createErrorHandler(false))
 }
 
-// createErrorHandler creates a reusable error handler for collectors with retry logic.
-func (s *Scraper) createErrorHandler() func(*colly.Response, error) {
+// createErrorHandler creates a reusable error handler for collectors with
+// retry logic. isListing differentiates pagination/listing URLs (whose
+// failures cascade — losing a page loses every restaurant under it) from
+// detail URLs. When the per-request retry budget is exhausted, the URL is
+// recorded for the outer retry pass via recordFailure.
+func (s *Scraper) createErrorHandler(isListing bool) func(*colly.Response, error) {
 	return func(r *colly.Response, err error) {
 		attempt := 1
 		if v := r.Ctx.GetAny("attempt"); v != nil {
@@ -634,51 +914,61 @@ func (s *Scraper) createErrorHandler() func(*colly.Response, error) {
 			"error":       err,
 			"status_code": r.StatusCode,
 			"url":         r.Request.URL.String(),
+			"listing":     isListing,
 		}
 
-		// Special handling for 403 Forbidden errors
-		if r.StatusCode == http.StatusForbidden {
-			log.WithFields(fields).Warn("request forbidden (403) - website may be blocking scraping. Consider clearing cache, using VPN, or increasing delays")
-			// For 403 errors, we still retry but with exponential backoff
-			if attempt < s.config.MaxRetry {
-				if err := s.client.ClearCache(r.Request); err != nil {
-					log.WithFields(fields).Error("failed to clear cache for request")
-				}
-
-				// Exponential backoff for 403 errors: 8s, 16s, 32s
-				backoff := time.Duration(attempt*attempt*8) * time.Second
-				log.WithFields(fields).Warnf("403 forbidden error, retrying after %v with fresh headers", backoff)
-				time.Sleep(backoff)
-
-				r.Ctx.Put("attempt", attempt+1)
-				r.Request.Retry()
-				return
-			} else {
-				log.WithFields(fields).Errorf("request forbidden after %d attempts - website blocking detected", attempt)
-				return
-			}
-		}
-
-		// Do not retry if already visited.
-		if strings.Contains(err.Error(), "already visited") {
+		// Never retry the "already visited" error — it's a benign dedup
+		// signal from colly, not a real fetch failure.
+		if err != nil && strings.Contains(err.Error(), "already visited") {
 			log.WithFields(fields).Debug("request already visited, skipping retry")
 			return
 		}
 
-		shouldRetry := attempt < s.config.MaxRetry
-		if shouldRetry {
-			if err := s.client.ClearCache(r.Request); err != nil {
-				log.WithFields(fields).Error("failed to clear cache for request")
+		// 403 / 429: site is actively rate-limiting or blocking. Longer
+		// exponential backoff with jitter; fresh headers via cache clear.
+		isRateLimit := r.StatusCode == http.StatusForbidden || r.StatusCode == http.StatusTooManyRequests
+		if isRateLimit {
+			log.WithFields(fields).Warn("request blocked or rate-limited by origin")
+			if attempt < s.config.MaxRetry {
+				if cerr := s.client.ClearCache(r.Request); cerr != nil {
+					log.WithFields(fields).Warn("failed to clear cache for request")
+				}
+				// 8s, 16s, 32s, 64s, ... + up to 4s jitter.
+				base := time.Duration(attempt*attempt*8) * time.Second
+				jitter := time.Duration(rand.Intn(4000)) * time.Millisecond
+				backoff := base + jitter
+				log.WithFields(fields).Warnf("rate-limit backoff, retrying in %v", backoff)
+				time.Sleep(backoff)
+				r.Ctx.Put("attempt", attempt+1)
+				if rerr := r.Request.Retry(); rerr != nil {
+					log.WithFields(fields).Warn("retry submit failed")
+				}
+				return
 			}
-
-			backoff := time.Duration(attempt) * s.config.Delay
-			log.WithFields(fields).Warnf("request failed, retrying after %v", backoff)
-			time.Sleep(backoff)
-
-			r.Ctx.Put("attempt", attempt+1)
-			r.Request.Retry()
-		} else {
-			log.WithFields(fields).Errorf("request failed after %d attempts, giving up", attempt)
+			log.WithFields(fields).Errorf("rate-limited after %d attempts, deferring to next pass", attempt)
+			s.recordFailure(r.Request, isListing, r.StatusCode, err)
+			return
 		}
+
+		// Generic retryable failure (network hiccup, 5xx, parse error, ...).
+		if attempt < s.config.MaxRetry {
+			if cerr := s.client.ClearCache(r.Request); cerr != nil {
+				log.WithFields(fields).Warn("failed to clear cache for request")
+			}
+			// Jittered exponential-ish backoff: attempt * Delay + random up to Delay.
+			base := time.Duration(attempt) * s.config.Delay
+			jitter := time.Duration(rand.Int63n(int64(s.config.Delay)))
+			backoff := base + jitter
+			log.WithFields(fields).Warnf("request failed, retrying in %v", backoff)
+			time.Sleep(backoff)
+			r.Ctx.Put("attempt", attempt+1)
+			if rerr := r.Request.Retry(); rerr != nil {
+				log.WithFields(fields).Warn("retry submit failed")
+			}
+			return
+		}
+
+		log.WithFields(fields).Errorf("request failed after %d attempts, deferring to next pass", attempt)
+		s.recordFailure(r.Request, isListing, r.StatusCode, err)
 	}
 }

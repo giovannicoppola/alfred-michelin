@@ -20,7 +20,11 @@ func (s *Scraper) extractRestaurantData(e *colly.XMLElement) storage.RestaurantD
 
 	description := e.ChildText(restaurantDescriptionXPath)
 	distinction := e.ChildText(restaurantDistinctionXPath)
-	greenStar := e.ChildText(restaurantGreenStarXPath)
+	// The XPath now targets an element carrying data-green-star="true", so
+	// read the attribute value directly. ChildText returned empty strings
+	// after Michelin's 2026 template change and silently broke green-star
+	// capture for the entire 2026 refresh.
+	greenStar := e.ChildAttr(restaurantGreenStarXPath, "data-green-star")
 
 	priceAndCuisine := e.ChildText(restaurantPriceAndCuisineXPath)
 	price, cuisine := parser.SplitUnpack(priceAndCuisine, "·")
@@ -39,6 +43,14 @@ func (s *Scraper) extractRestaurantData(e *colly.XMLElement) storage.RestaurantD
 	var year int
 	if v := e.Request.Ctx.GetAny("publishedYear"); v != nil {
 		if y, ok := v.(int); ok {
+			year = y
+		}
+	}
+	// Diff mode: the -year flag is authoritative. Override whatever the
+	// detail page's JSON-LD reports so a 2027 differential run saves award
+	// rows under 2027 even when Michelin hasn't rolled the guide over yet.
+	if v := e.Request.Ctx.GetAny("diff_target_year"); v != nil {
+		if y, ok := v.(int); ok && y > 0 {
 			year = y
 		}
 	}

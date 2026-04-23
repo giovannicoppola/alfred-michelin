@@ -254,3 +254,75 @@ func (r *SQLiteRepository) ListAllRestaurantsWithURL() ([]models.Restaurant, err
 func (r *SQLiteRepository) GetDB() *gorm.DB {
 	return r.db
 }
+
+// LatestAwardInfo is a read-only snapshot used by the differential scraper to
+// decide, from a listing-page URL alone, whether a detail fetch is needed.
+type LatestAwardInfo struct {
+	RestaurantID uint
+	Year         int
+	Distinction  string
+	Price        string
+	GreenStar    bool
+	InGuide      bool
+}
+
+// GetLatestAwardsByURL returns, for every restaurant with at least one award
+// row, a snapshot of that restaurant's most recent award keyed by restaurant
+// URL. Runs as a single correlated query so memory and wall-time stay flat
+// even with ~25k rows.
+func (r *SQLiteRepository) GetLatestAwardsByURL(ctx context.Context) (map[string]LatestAwardInfo, error) {
+	type row struct {
+		URL          string
+		RestaurantID uint
+		Year         int
+		Distinction  string
+		Price        string
+		GreenStar    bool
+		InGuide      bool
+	}
+
+	var rows []row
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT r.url AS url,
+		       r.id AS restaurant_id,
+		       a.year AS year,
+		       a.distinction AS distinction,
+		       a.price AS price,
+		       a.green_star AS green_star,
+		       r.in_guide AS in_guide
+		FROM restaurants r
+		JOIN restaurant_awards a ON a.restaurant_id = r.id
+		JOIN (
+		    SELECT restaurant_id, MAX(year) AS max_year
+		    FROM restaurant_awards
+		    GROUP BY restaurant_id
+		) latest ON latest.restaurant_id = a.restaurant_id AND latest.max_year = a.year
+		WHERE r.url != ''
+	`).Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest awards: %w", err)
+	}
+
+	out := make(map[string]LatestAwardInfo, len(rows))
+	for _, rr := range rows {
+		out[rr.URL] = LatestAwardInfo{
+			RestaurantID: rr.RestaurantID,
+			Year:         rr.Year,
+			Distinction:  rr.Distinction,
+			Price:        rr.Price,
+			GreenStar:    rr.GreenStar,
+			InGuide:      rr.InGuide,
+		}
+	}
+	return out, nil
+}
+
+// SetInGuide updates only the in_guide flag on a restaurant without touching
+// any other fields or triggering the validator (which would reject rows with
+// legitimately-empty fields we don't want to refetch).
+func (r *SQLiteRepository) SetInGuide(ctx context.Context, restaurantID uint, inGuide bool) error {
+	return r.db.WithContext(ctx).
+		Model(&models.Restaurant{}).
+		Where("id = ?", restaurantID).
+		UpdateColumn("in_guide", inGuide).Error
+}

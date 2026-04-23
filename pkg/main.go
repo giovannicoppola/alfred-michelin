@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -138,11 +139,12 @@ func initializeDatabase() error {
 
 	// Check if database already exists and preserve user data
 	if _, err := os.Stat(targetDbPath); err == nil {
-		backupPath := filepath.Join(workflowDataDir, "michelin_backup.db")
+		backupName := fmt.Sprintf("michelin_backup_%s.db", time.Now().UTC().Format("20060102T150405Z"))
+		backupPath := filepath.Join(workflowDataDir, backupName)
 		if err := os.Rename(targetDbPath, backupPath); err != nil {
 			return fmt.Errorf("failed to create backup of existing database: %v", err)
 		}
-		fmt.Fprintf(os.Stderr, "[DEBUG] Created backup of existing database\n")
+		fmt.Fprintf(os.Stderr, "[DEBUG] Created backup of existing database at %s\n", backupPath)
 
 		// Preserve user data from backup to new database
 		if err := preserveUserData(backupPath, extractedDbPath); err != nil {
@@ -150,6 +152,13 @@ func initializeDatabase() error {
 			// Continue anyway, but log the warning
 		} else {
 			fmt.Fprintf(os.Stderr, "[DEBUG] User data preserved successfully\n")
+		}
+
+		// Keep only the three most recent backups so repeated updates don't
+		// fill the data directory. Older backups become recoverable only
+		// from the previous snapshot, not from the workflow itself.
+		if err := pruneBackups(workflowDataDir, 3); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Failed to prune old backups: %v\n", err)
 		}
 	}
 
@@ -207,28 +216,6 @@ func main() {
 
 	// Skip CSV import for new database - data should already exist
 	// The new database comes pre-populated with restaurant data
-
-	// Automatically check for database updates before processing any commands
-	fmt.Fprintf(os.Stderr, "[DEBUG] Checking for database updates...\n")
-	err = db.UpdateDatabase(dbPath)
-	if err != nil {
-		if db.IsNoUpdateAvailable(err) {
-			// No update file found - this is normal, just log at debug level
-			fmt.Fprintf(os.Stderr, "[DEBUG] No database update file found\n")
-		} else {
-			// Real error occurred during update - log it but continue
-			fmt.Fprintf(os.Stderr, "[ERROR] Database update failed: %v\n", err)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Database update completed successfully\n")
-		// Reinitialize database connection after update
-		database.Close()
-		database, err = db.Initialize(dbPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Error reinitializing database after update: %v\n", err)
-			os.Exit(1)
-		}
-	}
 
 	// Process commands
 	command := os.Args[1]
@@ -395,6 +382,22 @@ func main() {
 	case "showDescription":
 		fmt.Fprintf(os.Stderr, "[DEBUG] Show description command called\n")
 		handleShowDescription(workDir)
+
+	case "report":
+		report, err := db.GenerateReport(database)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to generate report: %v\n", err)
+			os.Exit(1)
+		}
+		if len(os.Args) >= 3 && os.Args[2] != "" {
+			if err := os.WriteFile(os.Args[2], []byte(report), 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Failed to write report to %s: %v\n", os.Args[2], err)
+				os.Exit(1)
+			}
+			fmt.Fprintf(os.Stderr, "[INFO] Report written to %s\n", os.Args[2])
+		} else {
+			fmt.Print(report)
+		}
 
 	default:
 		showError(fmt.Sprintf("Unknown command: %s", command))
@@ -1793,123 +1796,57 @@ func copyFile(src, dst string) error {
 	return err
 }
 
+// pruneBackups keeps only the keep most recent michelin_backup_*.db files in
+// dir and removes the rest. Silent on a missing directory; returns the first
+// real error encountered.
+func pruneBackups(dir string, keep int) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var backups []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, "michelin_backup_") && strings.HasSuffix(name, ".db") {
+			backups = append(backups, name)
+		}
+	}
+	if len(backups) <= keep {
+		return nil
+	}
+	// Filenames embed a UTC timestamp in 20060102T150405Z format, so lexical
+	// sort is chronological. Oldest first after sort; trim the head.
+	sort.Strings(backups)
+	for _, name := range backups[:len(backups)-keep] {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // preserveUserData copies user-generated tables from old database to new database
 func preserveUserData(oldDbPath, newDbPath string) error {
-	// Open old database
 	oldDb, err := sql.Open("sqlite3", oldDbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open old database: %v", err)
 	}
 	defer oldDb.Close()
 
-	// Open new database
 	newDb, err := sql.Open("sqlite3", newDbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open new database: %v", err)
 	}
 	defer newDb.Close()
 
-	// Check if user tables exist in old database
-	var userFavoritesExist, userVisitsExist bool
-
-	// Check for user_favorites table
-	rows, err := oldDb.Query("SELECT name FROM sqlite_master WHERE type='table' AND name='user_favorites'")
-	if err != nil {
-		return fmt.Errorf("failed to check for user_favorites table: %v", err)
-	}
-	userFavoritesExist = rows.Next()
-	rows.Close()
-
-	// Check for user_visits table
-	rows, err = oldDb.Query("SELECT name FROM sqlite_master WHERE type='table' AND name='user_visits'")
-	if err != nil {
-		return fmt.Errorf("failed to check for user_visits table: %v", err)
-	}
-	userVisitsExist = rows.Next()
-	rows.Close()
-
-	if !userFavoritesExist && !userVisitsExist {
-		// No user data to preserve
-		return nil
-	}
-
-	// Create user tables in new database if they don't exist
-	_, err = newDb.Exec(`
-		CREATE TABLE IF NOT EXISTS user_favorites (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			restaurant_id INTEGER NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (restaurant_id) REFERENCES restaurants(id),
-			UNIQUE (restaurant_id)
-		);
-		
-		CREATE TABLE IF NOT EXISTS user_visits (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			restaurant_id INTEGER NOT NULL,
-			visited_date TEXT,
-			notes TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (restaurant_id) REFERENCES restaurants(id),
-			UNIQUE (restaurant_id)
-		);
-		
-		CREATE INDEX IF NOT EXISTS idx_user_favorites_restaurant ON user_favorites(restaurant_id);
-		CREATE INDEX IF NOT EXISTS idx_user_visits_restaurant ON user_visits(restaurant_id);
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create user tables in new database: %v", err)
-	}
-
-	// Copy user_favorites if it exists
-	if userFavoritesExist {
-		rows, err := oldDb.Query("SELECT restaurant_id, created_at FROM user_favorites")
-		if err != nil {
-			return fmt.Errorf("failed to query user_favorites from old database: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var restaurantID int64
-			var createdAt string
-			if err := rows.Scan(&restaurantID, &createdAt); err != nil {
-				return fmt.Errorf("failed to scan user_favorites row: %v", err)
-			}
-
-			// Insert into new database
-			_, err := newDb.Exec("INSERT OR IGNORE INTO user_favorites (restaurant_id, created_at) VALUES (?, ?)", restaurantID, createdAt)
-			if err != nil {
-				return fmt.Errorf("failed to insert user_favorites into new database: %v", err)
-			}
-		}
-		fmt.Fprintf(os.Stderr, "[DEBUG] Copied user_favorites table\n")
-	}
-
-	// Copy user_visits if it exists
-	if userVisitsExist {
-		rows, err := oldDb.Query("SELECT restaurant_id, visited_date, notes, created_at FROM user_visits")
-		if err != nil {
-			return fmt.Errorf("failed to query user_visits from old database: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var restaurantID int64
-			var visitedDate, notes, createdAt sql.NullString
-			if err := rows.Scan(&restaurantID, &visitedDate, &notes, &createdAt); err != nil {
-				return fmt.Errorf("failed to scan user_visits row: %v", err)
-			}
-
-			// Insert into new database
-			_, err := newDb.Exec("INSERT OR IGNORE INTO user_visits (restaurant_id, visited_date, notes, created_at) VALUES (?, ?, ?, ?)",
-				restaurantID, visitedDate, notes, createdAt)
-			if err != nil {
-				return fmt.Errorf("failed to insert user_visits into new database: %v", err)
-			}
-		}
-		fmt.Fprintf(os.Stderr, "[DEBUG] Copied user_visits table\n")
-	}
-
-	return nil
+	// Delegate to the URL-mapped migration. The scraper rebuilds the restaurants
+	// table from scratch, so restaurant IDs are not stable across updates — a
+	// naive id-to-id copy would silently point favorites/visits at the wrong
+	// restaurants. PreserveUserDataDuringUpdate re-resolves them by URL.
+	return db.PreserveUserDataDuringUpdate(oldDb, newDb)
 }
 
 // DescriptionResponse represents the JSON response for showDescription

@@ -7,10 +7,6 @@ import (
 	"strings"
 	"unicode"
 
-	"archive/zip"
-	"io"
-	"path/filepath"
-
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
@@ -20,21 +16,6 @@ import (
 const (
 	DbFileName = "michelin.db"
 )
-
-// NoUpdateAvailableError indicates that no database update file was found
-type NoUpdateAvailableError struct {
-	path string
-}
-
-func (e *NoUpdateAvailableError) Error() string {
-	return fmt.Sprintf("no database update file found at %s", e.path)
-}
-
-// IsNoUpdateAvailable checks if an error is a NoUpdateAvailableError
-func IsNoUpdateAvailable(err error) bool {
-	_, ok := err.(*NoUpdateAvailableError)
-	return ok
-}
 
 // normalizeForSearch removes accents and converts to lowercase for search comparison
 func normalizeForSearch(text string) string {
@@ -277,25 +258,38 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 	originalTerms := strings.Fields(query)
 	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
+	countryFilters := []string{}
+	stateFilters := []string{}
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
 
-	// Separate award filters from search terms
+	// Separate award / country / state filters from search terms.
+	// country:<value> uses substring match so `country:united` also matches
+	// "United Kingdom" / "United States". state:<xx> is an exact match on
+	// the 2-letter us_state code.
 	for i, term := range lowerTerms {
-		switch term {
-		case "1s":
+		switch {
+		case term == "1s":
 			awardFilters = append(awardFilters, "1 Star")
-		case "2s":
+		case term == "2s":
 			awardFilters = append(awardFilters, "2 Stars")
-		case "3s":
+		case term == "3s":
 			awardFilters = append(awardFilters, "3 Stars")
-		case "bg":
+		case term == "bg":
 			awardFilters = append(awardFilters, "Bib Gourmand")
-		case "sr":
+		case term == "sr":
 			awardFilters = append(awardFilters, "Selected Restaurants")
-		case "gs":
+		case term == "gs":
 			greenStarFilter = true
+		case strings.HasPrefix(term, "country:"):
+			if v := strings.TrimPrefix(term, "country:"); v != "" {
+				countryFilters = append(countryFilters, v)
+			}
+		case strings.HasPrefix(term, "state:"):
+			if v := strings.TrimPrefix(term, "state:"); v != "" {
+				stateFilters = append(stateFilters, v)
+			}
 		default:
 			searchTerms = append(searchTerms, term)
 			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
@@ -349,6 +343,18 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add country filters (substring match, case-insensitive)
+	for _, c := range countryFilters {
+		whereClause += " AND LOWER(r.country) LIKE ?"
+		args = append(args, "%"+c+"%")
+	}
+
+	// Add US state filters (exact match on 2-letter code, case-insensitive)
+	for _, st := range stateFilters {
+		whereClause += " AND LOWER(r.us_state) = ?"
+		args = append(args, st)
+	}
+
 	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
 	if !includeFormer {
 		whereClause += " AND r.in_guide = 1"
@@ -356,7 +362,7 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
 		limitClause = " LIMIT 100"
 	}
 
@@ -436,7 +442,7 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 	}
 
 	// Check if this was an empty search (no search terms, no filters)
-	isEmptySearch := len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter
+	isEmptySearch := len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter
 
 	return restaurants, isEmptySearch, nil
 }
@@ -449,25 +455,38 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	originalTerms := strings.Fields(query)
 	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
+	countryFilters := []string{}
+	stateFilters := []string{}
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
 
-	// Separate award filters from search terms
+	// Separate award / country / state filters from search terms.
+	// country:<value> uses substring match so `country:united` also matches
+	// "United Kingdom" / "United States". state:<xx> is an exact match on
+	// the 2-letter us_state code.
 	for i, term := range lowerTerms {
-		switch term {
-		case "1s":
+		switch {
+		case term == "1s":
 			awardFilters = append(awardFilters, "1 Star")
-		case "2s":
+		case term == "2s":
 			awardFilters = append(awardFilters, "2 Stars")
-		case "3s":
+		case term == "3s":
 			awardFilters = append(awardFilters, "3 Stars")
-		case "bg":
+		case term == "bg":
 			awardFilters = append(awardFilters, "Bib Gourmand")
-		case "sr":
+		case term == "sr":
 			awardFilters = append(awardFilters, "Selected Restaurants")
-		case "gs":
+		case term == "gs":
 			greenStarFilter = true
+		case strings.HasPrefix(term, "country:"):
+			if v := strings.TrimPrefix(term, "country:"); v != "" {
+				countryFilters = append(countryFilters, v)
+			}
+		case strings.HasPrefix(term, "state:"):
+			if v := strings.TrimPrefix(term, "state:"); v != "" {
+				stateFilters = append(stateFilters, v)
+			}
 		default:
 			searchTerms = append(searchTerms, term)
 			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
@@ -521,6 +540,18 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add country filters (substring match, case-insensitive)
+	for _, c := range countryFilters {
+		whereClause += " AND LOWER(r.country) LIKE ?"
+		args = append(args, "%"+c+"%")
+	}
+
+	// Add US state filters (exact match on 2-letter code, case-insensitive)
+	for _, st := range stateFilters {
+		whereClause += " AND LOWER(r.us_state) = ?"
+		args = append(args, st)
+	}
+
 	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
 	if !includeFormer {
 		whereClause += " AND r.in_guide = 1"
@@ -528,7 +559,7 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
 		limitClause = " LIMIT 100"
 	}
 
@@ -611,25 +642,38 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	originalTerms := strings.Fields(query)
 	lowerTerms := strings.Fields(strings.ToLower(query))
 	awardFilters := []string{}
+	countryFilters := []string{}
+	stateFilters := []string{}
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
 
-	// Separate award filters from search terms
+	// Separate award / country / state filters from search terms.
+	// country:<value> uses substring match so `country:united` also matches
+	// "United Kingdom" / "United States". state:<xx> is an exact match on
+	// the 2-letter us_state code.
 	for i, term := range lowerTerms {
-		switch term {
-		case "1s":
+		switch {
+		case term == "1s":
 			awardFilters = append(awardFilters, "1 Star")
-		case "2s":
+		case term == "2s":
 			awardFilters = append(awardFilters, "2 Stars")
-		case "3s":
+		case term == "3s":
 			awardFilters = append(awardFilters, "3 Stars")
-		case "bg":
+		case term == "bg":
 			awardFilters = append(awardFilters, "Bib Gourmand")
-		case "sr":
+		case term == "sr":
 			awardFilters = append(awardFilters, "Selected Restaurants")
-		case "gs":
+		case term == "gs":
 			greenStarFilter = true
+		case strings.HasPrefix(term, "country:"):
+			if v := strings.TrimPrefix(term, "country:"); v != "" {
+				countryFilters = append(countryFilters, v)
+			}
+		case strings.HasPrefix(term, "state:"):
+			if v := strings.TrimPrefix(term, "state:"); v != "" {
+				stateFilters = append(stateFilters, v)
+			}
 		default:
 			searchTerms = append(searchTerms, term)
 			originalSearchTerms = append(originalSearchTerms, originalTerms[i])
@@ -683,6 +727,18 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		whereClause += " AND ra.green_star = 1"
 	}
 
+	// Add country filters (substring match, case-insensitive)
+	for _, c := range countryFilters {
+		whereClause += " AND LOWER(r.country) LIKE ?"
+		args = append(args, "%"+c+"%")
+	}
+
+	// Add US state filters (exact match on 2-letter code, case-insensitive)
+	for _, st := range stateFilters {
+		whereClause += " AND LOWER(r.us_state) = ?"
+		args = append(args, st)
+	}
+
 	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
 	if !includeFormer {
 		whereClause += " AND r.in_guide = 1"
@@ -690,7 +746,7 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
 		limitClause = " LIMIT 100"
 	}
 
@@ -1025,147 +1081,10 @@ func GetRestaurantAwardHistory(db *sql.DB, restaurantID int64) ([]RestaurantAwar
 	return awards, nil
 }
 
-// UpdateDatabase checks for a zipped database in the workflow directory and updates the main database
-// Returns nil if update was successful, an error if update failed, or a special "no update available" error
-func UpdateDatabase(currentDbPath string) error {
-	workflowDir := "/Users/giovanni/gDrive/GitHub repos/alfred-michelin/source"
-	zipPath := filepath.Join(workflowDir, "michelin.db.zip")
-
-	// Check if the zip file exists
-	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
-		// Return a special error type that indicates no update is available (not a real error)
-		return &NoUpdateAvailableError{path: zipPath}
-	}
-
-	fmt.Printf("[UPDATE INFO] Found database update file: %s\n", zipPath)
-
-	// Extract the zip file to a temporary location
-	tempDir, err := os.MkdirTemp("", "michelin_update_")
-	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	newDbPath := filepath.Join(tempDir, "michelin.db")
-	err = extractZipFile(zipPath, newDbPath)
-	if err != nil {
-		return fmt.Errorf("failed to extract zip file: %v", err)
-	}
-
-	// Backup the current database
-	backupPath := strings.Replace(currentDbPath, ".db", "_backup.db", 1)
-	err = copyFile(currentDbPath, backupPath)
-	if err != nil {
-		return fmt.Errorf("failed to backup current database: %v", err)
-	}
-
-	fmt.Printf("Backed up current database to: %s\n", backupPath)
-
-	// Open both databases
-	currentDb, err := sql.Open("sqlite3", currentDbPath)
-	if err != nil {
-		return fmt.Errorf("failed to open current database: %v", err)
-	}
-	defer currentDb.Close()
-
-	newDb, err := sql.Open("sqlite3", newDbPath)
-	if err != nil {
-		return fmt.Errorf("failed to open new database: %v", err)
-	}
-	defer newDb.Close()
-
-	// Preserve user data during update
-	err = preserveUserDataDuringUpdate(currentDb, newDb)
-	if err != nil {
-		return fmt.Errorf("failed to preserve user data during update: %v", err)
-	}
-
-	// Replace the current database with the updated one
-	currentDb.Close()
-	newDb.Close()
-
-	err = os.Remove(currentDbPath)
-	if err != nil {
-		return fmt.Errorf("failed to remove old database: %v", err)
-	}
-
-	err = copyFile(newDbPath, currentDbPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy updated database: %v", err)
-	}
-
-	// Delete the zip file to prevent re-updating
-	err = os.Remove(zipPath)
-	if err != nil {
-		return fmt.Errorf("failed to remove zip file: %v", err)
-	}
-
-	fmt.Printf("[UPDATE SUCCESS] Database update completed successfully\n")
-	fmt.Printf("[UPDATE SUCCESS] Backup created at: %s\n", backupPath)
-	fmt.Printf("[UPDATE SUCCESS] Update zip file removed: %s\n", zipPath)
-	fmt.Printf("[UPDATE SUCCESS] ===== DATABASE UPDATE SUMMARY =====\n")
-	return nil
-}
-
-// extractZipFile extracts a zip file containing a database to the specified path
-func extractZipFile(zipPath, extractPath string) error {
-	// Open zip file
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	// Find the database file in the zip
-	var dbFile *zip.File
-	for _, f := range r.File {
-		if strings.HasSuffix(f.Name, ".db") {
-			dbFile = f
-			break
-		}
-	}
-
-	if dbFile == nil {
-		return fmt.Errorf("no .db file found in zip archive")
-	}
-
-	// Extract the database file
-	rc, err := dbFile.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-
-	outFile, err := os.OpenFile(extractPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, dbFile.Mode())
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	_, err = io.Copy(outFile, rc)
-	return err
-}
-
-// copyFile copies a file from src to dst
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	return err
-}
-
-// preserveUserDataDuringUpdate handles the complex logic of updating the database while preserving user data
-func preserveUserDataDuringUpdate(currentDb, newDb *sql.DB) error {
+// PreserveUserDataDuringUpdate handles the complex logic of updating the database while preserving user data.
+// Restaurant IDs are not stable across rebuilds of the scraped table — this function maps old favorites/visits
+// onto the new DB by matching restaurants on URL (which is stable), so foreign-key references stay correct.
+func PreserveUserDataDuringUpdate(currentDb, newDb *sql.DB) error {
 	// Get user favorites and visits from current database
 	favorites, err := getUserFavorites(currentDb)
 	if err != nil {
