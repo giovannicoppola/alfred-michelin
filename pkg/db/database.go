@@ -263,11 +263,14 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
+	currentOnlyFilter := false
 
 	// Separate award / country / state filters from search terms.
 	// country:<value> uses substring match so `country:united` also matches
 	// "United Kingdom" / "United States". state:<xx> is an exact match on
-	// the 2-letter us_state code.
+	// the 2-letter us_state code. --current forces in_guide=1 even when
+	// INCLUDE_FORMER=1 is set globally, so the user can peek at current-only
+	// results without toggling the env var.
 	for i, term := range lowerTerms {
 		switch {
 		case term == "1s":
@@ -282,6 +285,8 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 			awardFilters = append(awardFilters, "Selected Restaurants")
 		case term == "gs":
 			greenStarFilter = true
+		case term == "--current":
+			currentOnlyFilter = true
 		case strings.HasPrefix(term, "country:"):
 			if v := strings.TrimPrefix(term, "country:"); v != "" {
 				countryFilters = append(countryFilters, v)
@@ -355,14 +360,16 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 		args = append(args, st)
 	}
 
-	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
-	if !includeFormer {
+	// Restrict to in-guide restaurants unless INCLUDE_FORMER=1. --current in
+	// the query overrides that env var so users who normally include former
+	// restaurants can still peek at a current-only view per query.
+	if !includeFormer || currentOnlyFilter {
 		whereClause += " AND r.in_guide = 1"
 	}
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter && !currentOnlyFilter {
 		limitClause = " LIMIT 100"
 	}
 
@@ -442,7 +449,7 @@ func SearchRestaurants(db *sql.DB, query string) ([]Restaurant, bool, error) {
 	}
 
 	// Check if this was an empty search (no search terms, no filters)
-	isEmptySearch := len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter
+	isEmptySearch := len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter && !currentOnlyFilter
 
 	return restaurants, isEmptySearch, nil
 }
@@ -460,11 +467,14 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
+	currentOnlyFilter := false
 
 	// Separate award / country / state filters from search terms.
 	// country:<value> uses substring match so `country:united` also matches
 	// "United Kingdom" / "United States". state:<xx> is an exact match on
-	// the 2-letter us_state code.
+	// the 2-letter us_state code. --current forces in_guide=1 even when
+	// INCLUDE_FORMER=1 is set globally, so the user can peek at current-only
+	// results without toggling the env var.
 	for i, term := range lowerTerms {
 		switch {
 		case term == "1s":
@@ -479,6 +489,8 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 			awardFilters = append(awardFilters, "Selected Restaurants")
 		case term == "gs":
 			greenStarFilter = true
+		case term == "--current":
+			currentOnlyFilter = true
 		case strings.HasPrefix(term, "country:"):
 			if v := strings.TrimPrefix(term, "country:"); v != "" {
 				countryFilters = append(countryFilters, v)
@@ -552,14 +564,16 @@ func SearchFavoriteRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		args = append(args, st)
 	}
 
-	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
-	if !includeFormer {
+	// Restrict to in-guide restaurants unless INCLUDE_FORMER=1. --current in
+	// the query overrides that env var so users who normally include former
+	// restaurants can still peek at a current-only view per query.
+	if !includeFormer || currentOnlyFilter {
 		whereClause += " AND r.in_guide = 1"
 	}
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter && !currentOnlyFilter {
 		limitClause = " LIMIT 100"
 	}
 
@@ -647,11 +661,14 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 	searchTerms := []string{}
 	originalSearchTerms := []string{}
 	greenStarFilter := false
+	currentOnlyFilter := false
 
 	// Separate award / country / state filters from search terms.
 	// country:<value> uses substring match so `country:united` also matches
 	// "United Kingdom" / "United States". state:<xx> is an exact match on
-	// the 2-letter us_state code.
+	// the 2-letter us_state code. --current forces in_guide=1 even when
+	// INCLUDE_FORMER=1 is set globally, so the user can peek at current-only
+	// results without toggling the env var.
 	for i, term := range lowerTerms {
 		switch {
 		case term == "1s":
@@ -666,6 +683,8 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 			awardFilters = append(awardFilters, "Selected Restaurants")
 		case term == "gs":
 			greenStarFilter = true
+		case term == "--current":
+			currentOnlyFilter = true
 		case strings.HasPrefix(term, "country:"):
 			if v := strings.TrimPrefix(term, "country:"); v != "" {
 				countryFilters = append(countryFilters, v)
@@ -739,14 +758,16 @@ func SearchVisitedRestaurants(db *sql.DB, query string) ([]Restaurant, error) {
 		args = append(args, st)
 	}
 
-	// Add filter for restaurants not in guide based on INCLUDE_FORMER setting
-	if !includeFormer {
+	// Restrict to in-guide restaurants unless INCLUDE_FORMER=1. --current in
+	// the query overrides that env var so users who normally include former
+	// restaurants can still peek at a current-only view per query.
+	if !includeFormer || currentOnlyFilter {
 		whereClause += " AND r.in_guide = 1"
 	}
 
 	// Add LIMIT clause if no search terms provided (empty query)
 	limitClause := ""
-	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter {
+	if len(searchTerms) == 0 && len(awardFilters) == 0 && len(countryFilters) == 0 && len(stateFilters) == 0 && !greenStarFilter && !currentOnlyFilter {
 		limitClause = " LIMIT 100"
 	}
 

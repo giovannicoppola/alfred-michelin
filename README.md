@@ -77,6 +77,7 @@ src="https://img.shields.io/github/downloads/giovannicoppola/alfred-michelin/tot
 - `!mm "state:ca"` - All restaurants in California (2-letter state code, exact match)
 - `!mm "state:ny bg"` - Bib Gourmand restaurants in New York
 - `!mm "state:ca sushi"` - Sushi restaurants in California
+- `!mm "country:japan --current"` - If you run with `INCLUDE_FORMER=1` by default, append `--current` to drop delisted (📜) restaurants for one query
 
 Filter tokens:
 
@@ -88,6 +89,7 @@ Filter tokens:
 | `gs` | Green Star recipients |
 | `country:<name>` | Country (substring match, case-insensitive) |
 | `state:<xx>` | US state (2-letter code, exact match) |
+| `--current` | Restrict to restaurants currently in the guide, overriding `INCLUDE_FORMER=1` for this one query |
 
 Notes:
 
