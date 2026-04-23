@@ -109,9 +109,33 @@ This workflow uses data from the Michelin Guide [dataset](https://www.kaggle.com
 ## What's new in version 0.2
 
 ### 🗓️ Refreshed with the 2026 Michelin guide
-- Bundled database now contains **23,517 restaurants** (up from ~21,000) and **76,404 award rows** spanning 2018 – 2026.
-- **+6,278 new 2026 award rows** freshly scraped from `guide.michelin.com`.
-- Retired restaurants are retained in the DB and shown with the 📜 marker so award history stays queryable.
+
+How the bundled database changed between version 0.1 (July 2025 snapshot) and 0.2 (April 2026 snapshot):
+
+| Metric | v0.1 | v0.2 | Δ |
+| --- | ---: | ---: | ---: |
+| Total restaurants | 21,092 | 23,517 | **+2,425** |
+| Currently in guide | 18,131 | 20,587 | **+2,456** |
+| Award rows (all years) | 68,813 | 76,404 | **+7,591** |
+| Years covered | 2018 – 2025 | 2018 – 2026 | +2026 |
+| Distinct countries | 57 | 53\* | |
+
+\* v0.2 merged four casing duplicates (e.g. `Chinese mainland` / `China mainland` → `Chinese Mainland`).
+
+Current distinctions (most recent award per restaurant, in-guide only):
+
+| Distinction | v0.1 | v0.2 | Δ |
+| --- | ---: | ---: | ---: |
+| 3 Stars ⭐⭐⭐ | 157 | 160 | +3 |
+| 2 Stars ⭐⭐ | 507 | 559 | +52 |
+| 1 Star ⭐ | 3,084 | 3,324 | +240 |
+| Bib Gourmand | 3,354 | 3,840 | +486 |
+| Selected Restaurants | 11,029 | 12,704 | +1,675 |
+| Green Star 🌱 (any year) | 650 | 588 | −62 |
+
+The green-star drop is a real signal, not a bug: many restaurants that previously held a green star were either delisted or no longer flagged for one in the 2026 guide. 200 green stars are on 2026 awards specifically; the rest are on prior years for restaurants still in the guide. See the [2026 refresh report](2026-refresh-report.md) for the full methodology, including the scraper fix needed to recover green-star capture after Michelin's 2026 template rework.
+
+Retired restaurants are retained in the DB and shown with the 📜 marker so award history stays queryable.
 
 ### 🌍 Country and US-state search
 - Every restaurant now carries a normalized `country` (e.g. `France`, `USA`, `Japan`) and, for US restaurants, a 2-letter `us_state` code.
