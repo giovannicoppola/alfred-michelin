@@ -89,6 +89,12 @@ Filter tokens:
 | `country:<name>` | Country (substring match, case-insensitive) |
 | `state:<xx>` | US state (2-letter code, exact match) |
 
+Notes:
+
+- Filter tokens **cannot contain spaces** — for multi-word countries like `United Kingdom`, `Hong Kong SAR China`, or `South Korea` use a distinctive substring (`country:united`, `country:hong`, `country:korea`).
+- `state:` is US-only. For non-US regions use `country:` instead.
+- To see the full list of countries and US states currently in the database, run `./michelin report` and check the "Top 20 countries" and "Top 20 US states" sections.
+
 ## Once a restaurant is identified: 
 
 - `CTRL`: **❤️Favorite**: Toggle restaurant favorite status
