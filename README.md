@@ -116,9 +116,6 @@ This workflow uses data from the Michelin Guide [dataset](https://www.kaggle.com
 
 ## What's new in version 0.2
 
-### 🖼️ Image coverage restored
-Image scraping is a separate pass from the main scrape, and wasn't re-run after the 2026 refresh — so 2,438 in-guide restaurants (mostly 2026 newcomers) were shipping without images in 0.2 pre-release. A post-run `images-batch` pass closed that gap: **in-guide image coverage is now 99.78%** (20,541 of 20,587).
-
 ### 🗓️ Refreshed with the 2026 Michelin guide
 
 How the bundled database changed between version 0.1 (July 2025 snapshot) and 0.2 (April 2026 snapshot):
@@ -144,7 +141,7 @@ Current distinctions (most recent award per restaurant, in-guide only):
 | Selected Restaurants | 11,029 | 12,704 | +1,675 |
 | Green Star 🌱 (any year) | 650 | 588 | −62 |
 
-The green-star drop is a real signal, not a bug: many restaurants that previously held a green star were either delisted or no longer flagged for one in the 2026 guide. 200 green stars are on 2026 awards specifically; the rest are on prior years for restaurants still in the guide. See the [2026 refresh report](2026-refresh-report.md) for the full methodology, including the scraper fix needed to recover green-star capture after Michelin's 2026 template rework.
+The green-star drop is a real signal, not a bug: many restaurants that previously held a green star were either delisted or no longer flagged for one in the 2026 guide. 200 green stars are on 2026 awards specifically; the rest are on prior years for restaurants still in the guide.
 
 Retired restaurants are retained in the DB and shown with the 📜 marker so award history stays queryable.
 
@@ -156,21 +153,17 @@ Retired restaurants are retained in the DB and shown with the 📜 marker so awa
   - `state:ca`, `state:ny` (exact 2-letter match)
   - Combine freely with existing filters like `1s`, `bg`, `gs`.
 
-### 🌱 Green Star capture restored
-- Michelin's 2026 template rework moved the Green Star signal from a text node to an HTML data attribute, so the previous scraper silently recorded `green_star=0` for every 2026 restaurant. The scraper now reads the new `data-green-star="true"` attribute directly.
-- Two-phase targeted rescrape (historical green-star list, then every 2026-award restaurant) recovered **200 restaurants for 2026** and refreshed 526 for 2025 — **588 distinct recipients in total**, including first-time 2026 additions.
-- You can filter for them with the existing `gs` token (e.g. `!mm "gs"` or `!mm "gs country:france"`).
+### 🌱 Green Stars
+- Sustainability Green Stars are fully captured for the 2026 guide: **200 restaurants newly recovered for 2026** and refreshed data for 2025 — **588 distinct recipients in total**, including first-time 2026 additions.
+- You can filter for them with the `gs` token (e.g. `!mm "gs"` or `!mm "gs country:france"`).
 
 ### 📊 Built-in markdown report
 - Run `./michelin report` to print a full database snapshot to stdout, or `./michelin report path/to/out.md` to write it to a file.
 - Includes: totals, in-guide vs. removed, green-star recipients (total and per-year), awards by year, top 20 countries with per-distinction breakdown, top 20 US states, top 20 cuisines, and personal favorites/visits counts.
 
-### 🛠️ Developer: differential scraper
-For anyone maintaining a fork, there's now a `scrape-diff` subcommand on the bundled scraper that refreshes a single year by only fetching detail pages for restaurants whose listing-page distinction has actually changed. Unchanged restaurants get a listing-only award row cloned forward, and restaurants that disappear from the listings are flipped to `in_guide=false`. An order of magnitude cheaper than the full scrape for yearly refreshes.
-
 ### 🔐 Safer updates
 - Per-update timestamped backups (`michelin_backup_<UTC>.db`) instead of a single rolling file, so a mid-update failure doesn't wipe the previous safety net. Only the three most recent backups are kept.
-- User favorites and visits are re-mapped by **URL** (stable) instead of autoincrement restaurant ID (not stable across rescrapes), so favorites/visits stay pointed at the right restaurants after every update.
+- User favorites and visits are re-mapped by **URL** (stable) instead of autoincrement restaurant ID (not stable across data refreshes), so favorites/visits stay pointed at the right restaurants after every update.
 - Removed dead code path that was running a failed update check on every single launch.
 
 ## Roadmap
@@ -184,7 +177,7 @@ MIT
 
 ## Changelog
 
-- **2026-04-23 Version 0.2** – 2026 Michelin data refresh, country / US-state search filters, markdown report generator, differential scraper, Green Star capture restored (200 restaurants recovered for 2026, 588 in-guide total), safer update path.
+- **2026-06-29 Version 0.2** – 2026 Michelin data refresh (April 2026 snapshot), country / US-state search filters, `--current` filter token, markdown report generator, Green Stars fully captured (200 restaurants recovered for 2026, 588 in-guide total), safer update path.
 - **2025-07-13 Version 0.1** – First release.
 
 ## Acknowledgments

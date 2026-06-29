@@ -942,7 +942,7 @@
 	</array>
 	<key>readme</key>
 	<string># Michelin Guide ✨️
-A Workflow to search, favorite, and track your visits to 20,000+ Michelin guide restaurants around the world.
+A Workflow to search, favorite, and track your visits to 23,000+ Michelin guide restaurants around the world, refreshed with the 2026 guide.
 
 Feeling fancy? 🎩 Find your next Michelin-starred restaurant with Alfred. ✨
 
@@ -950,7 +950,7 @@ Feeling fancy? 🎩 Find your next Michelin-starred restaurant with Alfred. ✨
 
 ## Usage
 
-- `!mm [query]` - Search for Michelin restaurants by name, location, cuisine, or distinction. Search is case-sensitive when it includes uppercase letters. Awards can be searched via `3s`, `2s`, `1s`, `bib`, `gs`, or `sr` keywords.
+- `!mm [query]` - Search for Michelin restaurants by name, location, cuisine, or distinction. Search is case-sensitive when it includes uppercase letters. Awards can be searched via `3s`, `2s`, `1s`, `bg`, `gs`, or `sr` keywords. Narrow by country or US state with `country:japan` or `state:ca`, and append `--current` to show only restaurants currently in the guide.
 - `!mf` List and search all your favorite restaurants
 - `!mv` List and search all your visited restaurants
 
@@ -961,7 +961,13 @@ Once a restaurant is identified:
 - &lt;kbd&gt;^&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ❤️ add or remove from favorites.
 - &lt;kbd&gt;⌥&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ✅️ add or remove from visited.
 - &lt;kbd&gt;⌘&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; 🏆️ view award history (&lt;kbd&gt;⌘&lt;/kbd&gt;&lt;kbd&gt;⌥&lt;/kbd&gt;: back).
-- &lt;kbd&gt;⇧&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ℹ️ show more details.</string>
+- &lt;kbd&gt;⇧&lt;/kbd&gt;&lt;kbd&gt;↩️&lt;/kbd&gt; ℹ️ show more details.
+
+## New in version 0.2
+
+- 🗓️ Refreshed with the 2026 Michelin guide — 23,000+ restaurants, now covering 2018–2026.
+- 🌍 Country and US-state search filters: `country:japan`, `state:ca` — combine freely with award filters.
+- 🔎 `--current` token to restrict a query to restaurants currently in the guide.</string>
 	<key>uidata</key>
 	<dict>
 		<key>05B542ED-454F-451D-B50B-29B004FC946B</key>
