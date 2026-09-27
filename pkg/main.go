@@ -97,16 +97,6 @@ func initializeDatabase() error {
 		// Check if michelin.db exists in workflow data folder
 		dbPath := filepath.Join(workflowDataDir, "michelin.db")
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			// Database doesn't exist, show error
-			items := []AlfredItem{
-				{
-					Title:    "Error, missing database",
-					Subtitle: "delete and re-install this workflow, or contact the developer",
-					Valid:    false,
-				},
-			}
-			result := AlfredResult{Items: items}
-			printJSON(result)
 			return fmt.Errorf("missing database file")
 		}
 		// Database exists, no action needed
@@ -184,7 +174,7 @@ func initializeDatabase() error {
 func main() {
 	// Check command-line arguments
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "[ERROR] Usage: alfred-michelin [command] [arguments]\n")
+		showError("Usage: michelin [command] [arguments]")
 		os.Exit(1)
 	}
 
@@ -209,7 +199,7 @@ func main() {
 	dbPath := filepath.Join(workflowDataDir, db.DbFileName)
 	database, err := db.Initialize(dbPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing database: %v\n", err)
+		showError(fmt.Sprintf("Error initializing database: %v", err))
 		os.Exit(1)
 	}
 	defer database.Close()
@@ -915,10 +905,12 @@ func handleSearchVisited(database *sql.DB, query string) {
 
 // handleToggleFavorite toggles a restaurant's favorite status
 func handleToggleFavorite(database *sql.DB, id int64) {
-	// Toggle favorite with timing
-	timeQuery(fmt.Sprintf("toggle favorite id: %d", id), func() error {
+	if err := timeQuery(fmt.Sprintf("toggle favorite id: %d", id), func() error {
 		return db.ToggleFavorite(database, id)
-	})
+	}); err != nil {
+		showError(fmt.Sprintf("Error toggling favorite: %v", err))
+		return
+	}
 
 	// Get restaurant details with timing
 	var restaurant db.Restaurant
@@ -943,10 +935,12 @@ func handleToggleFavorite(database *sql.DB, id int64) {
 
 // handleToggleVisited toggles a restaurant's visited status
 func handleToggleVisited(database *sql.DB, id int64, date, notes string) {
-	// Toggle visited with timing
-	timeQuery(fmt.Sprintf("toggle visited id: %d", id), func() error {
+	if err := timeQuery(fmt.Sprintf("toggle visited id: %d", id), func() error {
 		return db.ToggleVisited(database, id, date, notes)
-	})
+	}); err != nil {
+		showError(fmt.Sprintf("Error toggling visited: %v", err))
+		return
+	}
 
 	// Get restaurant details with timing
 	var restaurant db.Restaurant

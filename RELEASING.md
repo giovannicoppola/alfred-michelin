@@ -10,6 +10,12 @@ contain:
    on first run `initializeDatabase()` in `pkg/main.go` extracts `michelin.db`
    from `michelin.db.zip` **in the workflow's own directory**.
 
+⚠️ After extracting, `initializeDatabase()` **deletes** `michelin.db.zip`. If your
+installed workflow is a symlink to `source/`, any local run consumes the repo's
+zip, so `git status` shows `D source/michelin.db.zip`. That is expected. Run
+`git restore source/michelin.db.zip` before packaging, and build the
+`.alfredworkflow` **before** testing locally.
+
 `pkg/buildApp.sh` only compiles + `lipo`s the universal binary — it does **not**
 sign, notarize, or assemble the bundle. Those are the manual steps below.
 
