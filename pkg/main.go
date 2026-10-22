@@ -373,6 +373,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] Show description command called\n")
 		handleShowDescription(workDir)
 
+	case "stats":
+		handleStats(database, workflowDataDir)
+
 	case "report":
 		report, err := db.GenerateReport(database)
 		if err != nil {
@@ -1256,6 +1259,37 @@ func handleVisited(database *sql.DB) {
 }
 
 // showError displays an error message in Alfred format
+// handleStats prints the Text View JSON for the personal stats and writes the
+// HTML report next to the database. The variable names match alfred-readwise
+// and alfred-finances, so the ↩ / ⌘↩ wiring reads the same.
+func handleStats(database *sql.DB, dataDir string) {
+	out := map[string]interface{}{"behaviour": map[string]string{"response": "replace", "scroll": "start"}}
+	s, err := db.GatherUserStats(database)
+	if err != nil {
+		out["response"] = fmt.Sprintf("# Stats unavailable\n\n`%v`", err)
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+	if len(s.Visited) == 0 && len(s.Favorites) == 0 {
+		out["response"] = "# 🍽️ Your Michelin restaurants\n\nNothing visited or favorited yet: " +
+			"⌥↩ on a restaurant marks it visited, ⌃↩ adds it to your favorites."
+		out["footer"] = "no visits or favorites yet"
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+	md := db.UserStatsMarkdown(s)
+	reportPath := filepath.Join(dataDir, "michelin-report.html")
+	if err := os.WriteFile(reportPath, []byte(db.UserStatsHTML(s)), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to write %s: %v\n", reportPath, err)
+	}
+	out["response"] = md
+	out["footer"] = "↩ open the HTML report · ⌘↩ copy this summary"
+	out["variables"] = map[string]string{"statsReportPath": reportPath, "statsReportMarkdown": md}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	enc.Encode(out)
+}
+
 func showError(message string) {
 	// Log error to stderr for Alfred debugger
 	fmt.Fprintf(os.Stderr, "[ERROR] %s\n", message)

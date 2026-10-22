@@ -40,6 +40,11 @@ src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubuserc
 - **Search Visits**: Search within your visited restaurants using `!mv [query]`
 - **Visual Indicators**: Checkmark emoji (✅) shows visited status
 
+### 📊 Your Stats
+- **Personal Stats**: `!mstats` (set your own keyword in Workflow Configuration) opens a summary of the restaurants you have visited and favorited (not the whole guide)
+- **What's in it**: visits by distinction against the whole guide (e.g. 10 of the 160 three-star restaurants), stars collected, countries and cities with how many of their starred restaurants you have been to, cuisines, price levels, visits by month, recent visits, and favorites still to try
+- **HTML Report**: from the summary, ↩ opens a fuller HTML report (every visit, filterable, linked to the Michelin guide page) and ⌘↩ copies the summary as Markdown
+
 ### 🌐 External Integration
 - **Website Access**: Open restaurant websites directly from Alfred
 - **Michelin Guide**: View restaurants on the official Michelin Guide website
@@ -55,6 +60,7 @@ src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubuserc
 - `!mf [query]` - Search within your favorite restaurants
 - `!mv` - View all restaurants you've visited
 - `!mv [query]` - Search within your visited restaurants
+- `!mstats` - Stats on your visited and favorite restaurants
 
 ## Search Examples
 
